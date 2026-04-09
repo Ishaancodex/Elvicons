@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Overview — ELF Design System 2.0</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Page Transitions ───────────────────────────────── */
+    @view-transition { navigation: auto; }
+
+    @keyframes fade-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+
+    ::view-transition-old(root) { animation: 180ms ease-in  fade-out; }
+    ::view-transition-new(root) { animation: 220ms ease-out fade-in;  }
+
+    /* Fallback: fade-in on load for non-VT browsers */
+    body { animation: fade-in 220ms ease-out both; }
+
+    /* ── Design Tokens ──────────────────────────────────── */
+    :root {
+      --brand:    #006cb6;
+      --brand-dk: #025085;
+      --brand-lt: #deefff;
+      --text-1:   #0d121c;
+      --text-2:   #364152;
+      --text-3:   #9aa4b2;
+      --disabled: #a3a7ae;
+      --bg:       #eef1f6;
+      --surface:  #ffffff;
+      --border:   #e9eaeb;
+      --error:    #d92d2d;
+      --shadow:   0px 12px 40px rgba(0,108,182,0.12);
+      --shadow-sm:0px 4px 16px rgba(0,108,182,0.08);
+      --r-card:   12px;
+      --r-btn:    8px;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+
+    body {
+      font-family: 'Manrope', sans-serif;
+      color: var(--text-1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .hdr {
+      height: 68px;
+      background: rgba(255,255,255,0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(233,234,235,0.7);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 0;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 100;
+    }
+
+    .logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 280px;
+      flex-shrink: 0;
+    }
+
+    .logo-e {
+      width: 36px;
+      height: 36px;
+      background: var(--brand);
+      border: 1.5px solid var(--brand-dk);
+      border-radius: var(--r-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-e span {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 20px;
+      color: white;
+      line-height: 1;
+      margin-top: 1px;
+    }
+
+    .logo-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 22px;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .logo-text .elf { color: var(--brand); }
+    .logo-text .ds  { color: var(--text-1); }
+
+    .hdr-nav {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .nav-item {
+      display: inline-block;
+      text-decoration: none;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--text-2);
+      letter-spacing: 0.25px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: color 0.12s, background 0.12s;
+      white-space: nowrap;
+    }
+
+    .nav-item:hover { color: var(--text-1); }
+    .nav-item.active { color: var(--brand); font-weight: 500; letter-spacing: 0.1px; }
+
+    .hdr-search {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-btn);
+      padding: 7px 12px;
+      width: 200px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .search-icon { color: var(--text-3); flex-shrink: 0; display: flex; }
+    .search-placeholder { font-size: 14px; color: var(--text-3); flex: 1; }
+    .search-slash {
+      background: #f8fafc;
+      border-radius: 3.6px;
+      width: 18px; height: 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 500; color: var(--disabled);
+      flex-shrink: 0;
+    }
+
+    .hdr-user {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 20px;
+      flex-shrink: 0;
+    }
+
+    .user-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #006cb6, #0096e6);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 13px; font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .user-info { line-height: 1.3; }
+    .user-name { font-size: 13px; font-weight: 600; color: var(--text-1); display: block; }
+    .user-role { font-size: 11px; color: #4d4d4f; letter-spacing: -0.24px; }
+    .chevron-icon { color: var(--text-3); }
+
+    /* ── Page body ───────────────────────────────────────── */
+    .page {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .sidebar {
+      width: 252px;
+      padding: 24px 24px 0;
+      overflow-y: auto;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-card {
+      background: var(--surface);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .sb-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 22px;
+      line-height: 28px;
+      color: var(--text-3);
+      flex-shrink: 0;
+    }
+
+    .sb-divider {
+      height: 1px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    .sb-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .sb-item {
+      display: block;
+      text-decoration: none;
+      padding: 10px 16px;
+      border-radius: var(--r-btn);
+      font-size: 13.5px;
+      font-weight: 400;
+      color: var(--text-2);
+      letter-spacing: 0.25px;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .sb-item:hover { background: var(--bg); }
+
+    .sb-item.active {
+      background: var(--brand-lt);
+      color: var(--brand);
+      font-weight: 500;
+      letter-spacing: 0.1px;
+    }
+
+    .sb-footer {
+      font-family: 'Instrument Serif', serif;
+      font-size: 14px;
+      color: var(--text-3);
+      padding: 12px 0 4px;
+      text-align: center;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .sb-watermark {
+      position: absolute;
+      bottom: 60px;
+      left: -55px;
+      width: 243px;
+      height: 243px;
+      background: var(--brand);
+      border: 6.75px solid var(--brand-dk);
+      border-radius: 81px;
+      opacity: 0.05;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .sb-watermark-e {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 120px;
+      color: white;
+      line-height: 1;
+    }
+
+    /* ── Main content ────────────────────────────────────── */
+    .main {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      min-width: 0;
+    }
+
+    .main-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 24px 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      min-width: 0;
+    }
+
+    /* ── Welcome Card ───────────────────────────────────── */
+    .welcome-card {
+      background: var(--surface);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .welcome-heading {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 24px;
+      line-height: 28px;
+      color: var(--text-1);
+    }
+
+    .welcome-heading .blue { color: var(--brand); }
+
+    .welcome-desc {
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: var(--text-2);
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Components Card ─────────────────────────────────── */
+    .components-card {
+      background: var(--surface);
+      border-radius: var(--r-card);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      flex-shrink: 0;
+    }
+
+    .components-heading {
+      font-family: 'Instrument Serif', serif;
+      font-size: 24px;
+      line-height: 28px;
+      color: var(--text-1);
+      margin-bottom: 16px;
+    }
+
+    .components-divider {
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 24px;
+    }
+
+    .components-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    /* ── Component Card ──────────────────────────────────── */
+    .comp-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-card);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* clickable variant (Button only) */
+    .comp-card.clickable {
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+
+    .comp-card.clickable:hover {
+      box-shadow: var(--shadow);
+      transform: translateY(-2px);
+    }
+
+    /* ── Coming Soon chip ────────────────────────────────── */
+    .coming-soon-chip {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      background: rgba(0,108,182,0.1);
+      color: var(--brand);
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      padding: 4px 9px;
+      border-radius: 20px;
+      border: 1px solid rgba(0,108,182,0.2);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /* ── Card Preview (dotted grid artboard) ─────────────── */
+    .comp-preview {
+      height: 268px;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: radial-gradient(circle, rgba(0,108,182,0.15) 1.5px, transparent 1.5px);
+      background-size: 22px 22px;
+      background-color: #f8fbff;
+    }
+
+    /* floating preview widget */
+    .preview-widget {
+      background: var(--surface);
+      border-radius: 8px;
+      box-shadow: 0px 8px 28px rgba(0,108,182,0.12);
+      border: 0.7px solid var(--border);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Card Info ───────────────────────────────────────── */
+    .comp-info {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .comp-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      line-height: 24px;
+      color: var(--brand);
+    }
+
+    .comp-desc {
+      font-size: 15px;
+      font-weight: 400;
+      line-height: 22px;
+      color: var(--text-2);
+      letter-spacing: 0.3px;
+    }
+
+    /* ══ Miniature Preview Widgets ══════════════════════════ */
+
+    /* ── Alerts ── */
+    .pw-alert {
+      width: 210px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .pw-alert-hdr {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .pw-alert-icon {
+      width: 13px; height: 13px;
+      border-radius: 50%;
+      background: var(--brand);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .pw-alert-icon svg { width: 8px; height: 8px; fill: white; }
+    .pw-alert-title { font-size: 9.5px; font-weight: 600; color: var(--text-1); flex: 1; }
+    .pw-alert-time { font-size: 7.5px; color: var(--text-1); }
+    .pw-alert-close { font-size: 9px; color: var(--text-3); line-height: 1; }
+
+    .pw-alert-body { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+    .pw-alert-text { font-size: 8.5px; color: var(--text-1); }
+
+    .pw-prog-wrap { display: flex; align-items: center; gap: 4px; }
+    .pw-prog-track { flex: 1; height: 4px; background: #f5f5f5; border-radius: 2px; overflow: hidden; }
+    .pw-prog-fill { height: 100%; background: var(--brand); border-radius: 2px; }
+    .pw-prog-pct { font-size: 6.5px; color: var(--text-1); }
+
+    .pw-alert-btns { display: flex; gap: 6px; }
+    .pw-ghost-btn {
+      font-size: 8px; font-weight: 600; color: var(--brand);
+      padding: 4px 8px; border-radius: 4px;
+      background: var(--surface);
+    }
+
+    /* ── Button ── */
+    .pw-btn {
+      background: var(--brand);
+      color: white;
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+      padding: 11px 28px;
+      border-radius: var(--r-btn);
+      letter-spacing: 0.15px;
+      box-shadow: 0px 12px 40px rgba(0,108,182,0.25);
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Breadcrumbs ── */
+    .pw-bc {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 9px;
+    }
+
+    .pw-bc-row { display: flex; align-items: center; gap: 4px; }
+    .pw-bc-dim { color: var(--text-3); }
+    .pw-bc-sep { color: var(--text-3); }
+    .pw-bc-cur { color: var(--text-1); font-weight: 600; }
+
+    /* ── Checkbox ── */
+    .pw-cbs {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .pw-cb-row { display: flex; align-items: center; gap: 10px; }
+
+    .pw-cb {
+      width: 15px; height: 15px;
+      border-radius: 3.5px;
+      border: 1.5px solid var(--text-2);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .pw-cb.checked { background: var(--brand); border-color: var(--brand); }
+
+    .pw-cb svg { width: 10px; height: 10px; display: block; }
+
+    .pw-cb-label { font-size: 9px; font-weight: 500; color: var(--text-1); }
+
+    /* ── Chips ── */
+    .pw-chips {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-family: 'Manrope', sans-serif;
+      min-width: 110px;
+    }
+
+    .pw-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 8px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+    }
+
+    .pw-chip.sel { background: var(--brand-lt); box-shadow: 0px 1px 3px rgba(33,33,33,0.1); }
+
+    .pw-chip-av {
+      width: 22px; height: 22px;
+      background: var(--brand-lt);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 7.5px; font-weight: 600; color: var(--brand);
+      flex-shrink: 0;
+    }
+
+    .pw-chip-lbl { font-size: 8.5px; color: var(--text-1); }
+
+    /* ── Input Fields ── */
+    .pw-input {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      width: 210px;
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .pw-lbl-row { display: flex; align-items: center; gap: 3px; margin-bottom: 1px; }
+    .pw-lbl { font-size: 8.5px; font-weight: 600; color: var(--text-1); }
+    .pw-lbl-req { font-size: 8.5px; font-weight: 600; color: var(--error); }
+    .pw-lbl-info {
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 1px solid var(--text-3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 6px; color: var(--text-3); font-weight: 700;
+      margin-left: 2px;
+    }
+
+    .pw-input-box {
+      display: flex; align-items: center; gap: 5px;
+      border: 0.8px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 9px;
+      background: white;
+    }
+
+    .pw-input-lead { font-size: 10px; color: var(--text-3); }
+    .pw-placeholder { font-size: 8.5px; color: var(--text-3); flex: 1; }
+    .pw-input-trail { font-size: 8.5px; color: var(--text-3); }
+
+    .pw-caption-row { display: flex; align-items: center; gap: 3px; margin-top: 1px; }
+    .pw-caption-info {
+      width: 10px; height: 10px; border-radius: 50%;
+      border: 1px solid var(--text-3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 6px; color: var(--text-3); font-weight: 700;
+    }
+    .pw-caption { font-size: 7.5px; color: var(--text-3); }
+
+    /* ── Progress Bar ── */
+    .pw-pbs {
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      width: 190px;
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .pw-pb-row { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+    .pw-pb-track { width: 100%; height: 7px; background: #f6f6f6; border-radius: 4px; overflow: hidden; }
+    .pw-pb-fill { height: 100%; background: var(--brand); border-radius: 4px; }
+    .pw-pb-lbl { font-size: 8px; color: var(--text-1); }
+
+    /* ── Search Overlay ──────────────────────────────────── */
+    .search-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(13,18,28,0.45);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 500;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 100px;
+    }
+    .search-overlay.open { display: flex; animation: fade-in 150ms ease-out both; }
+
+    .search-modal {
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: 0px 32px 80px rgba(0,0,0,0.22), 0px 8px 24px rgba(0,108,182,0.12);
+      width: 580px;
+      max-height: 500px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: srch-in 180ms cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    @keyframes srch-in {
+      from { opacity: 0; transform: scale(0.95) translateY(-8px); }
+      to   { opacity: 1; transform: scale(1)    translateY(0);    }
+    }
+
+    .search-input-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .search-input-row svg { color: var(--text-3); flex-shrink: 0; }
+
+    .search-input {
+      flex: 1; border: none; outline: none;
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px; color: var(--text-1); background: transparent;
+    }
+    .search-input::placeholder { color: var(--text-3); }
+
+    .search-kbd {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 3px 8px; font-size: 11px; font-weight: 600; color: var(--text-3);
+      letter-spacing: 0.3px; cursor: pointer; flex-shrink: 0;
+    }
+
+    .search-results { overflow-y: auto; padding: 8px; flex: 1; }
+
+    .search-section-label {
+      font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--text-3); padding: 10px 12px 6px;
+    }
+
+    .search-item {
+      display: flex; align-items: center; gap: 14px;
+      padding: 11px 12px; border-radius: 10px;
+      cursor: pointer; transition: background 0.1s;
+      text-decoration: none; color: inherit;
+    }
+    .search-item:hover, .search-item.focused { background: #f0f7ff; }
+
+    .search-item-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--brand-lt);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    .search-item-body { flex: 1; min-width: 0; }
+    .search-item-name { font-size: 14px; font-weight: 600; color: var(--text-1); }
+    .search-item-desc { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+
+    .search-item-badge {
+      font-size: 11px; font-weight: 600;
+      padding: 3px 9px; border-radius: 20px; flex-shrink: 0;
+    }
+    .badge-live { background: #e8f7ef; color: #15b36a; }
+    .badge-soon { background: var(--brand-lt); color: var(--brand); }
+
+    .search-empty { padding: 40px 20px; text-align: center; color: var(--text-3); font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════ -->
+<header class="hdr">
+  <div class="logo-wrap">
+    <div class="logo-e"><span>E</span></div>
+    <div class="logo-text"><span class="elf">Elf</span><span class="ds"> Design System.</span></div>
+  </div>
+
+  <nav class="hdr-nav">
+    <a class="nav-item active" href="index.html">Components</a>
+    <a class="nav-item" href="#">Tokens</a>
+    <a class="nav-item" href="#">Guidelines</a>
+  </nav>
+
+  <div class="hdr-search">
+    <span class="search-icon">
+      <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+        <circle cx="7.5" cy="7.5" r="5.5"/><path d="m12 12 4 4"/>
+      </svg>
+    </span>
+    <span class="search-placeholder">Search...</span>
+    <span class="search-slash">/</span>
+  </div>
+
+  <div class="hdr-user">
+    <div class="user-avatar">I</div>
+    <div class="user-info">
+      <span class="user-name">Ishaan</span>
+      <span class="user-role">Design</span>
+    </div>
+    <span class="chevron-icon">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><polyline points="4,6 8,10 12,6"/></svg>
+    </span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════
+     PAGE
+════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <div class="sb-title">Components Library</div>
+      <div class="sb-divider"></div>
+      <nav class="sb-nav">
+        <a class="sb-item active" href="index.html">Overview</a>
+        <a class="sb-item" href="#">Alerts</a>
+        <a class="sb-item" href="button.html">Button</a>
+        <a class="sb-item" href="#">Breadcrumbs</a>
+        <a class="sb-item" href="#">Checkbox</a>
+        <a class="sb-item" href="#">Chips</a>
+        <a class="sb-item" href="#">Input Fields</a>
+        <a class="sb-item" href="#">Progress Bar</a>
+      </nav>
+      <div class="sb-footer">Made with ❤️ in India</div>
+      <div class="sb-watermark"><span class="sb-watermark-e">E</span></div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main class="main">
+  <div class="main-scroll">
+
+    <!-- Welcome Card -->
+    <div class="welcome-card">
+      <p class="welcome-heading">Welcome to <span class="blue">Elf Design System</span></p>
+      <p class="welcome-desc">The Elf design system establishes the essential foundations that shape the entire user interface of ANACITY. It seamlessly integrates all of our ANACITY experiences, uniting them under one comprehensive framework that ensures consistency and harmony across every interaction.</p>
+    </div>
+
+    <!-- App Components -->
+    <div class="components-card">
+      <h2 class="components-heading">App Components</h2>
+      <div class="components-divider"></div>
+
+      <div class="components-grid">
+
+        <!-- ① Alerts — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-alert">
+                <div class="pw-alert-hdr">
+                  <div class="pw-alert-icon">
+                    <svg viewBox="0 0 8 8"><path d="M4 0.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm0 1.3a.45.45 0 110 .9.45.45 0 010-.9zm-.6 1.5h1.2v2.4H3.4V3.3z"/></svg>
+                  </div>
+                  <span class="pw-alert-title">Title</span>
+                  <span class="pw-alert-time">12:39 PM</span>
+                  <span class="pw-alert-close">✕</span>
+                </div>
+                <div class="pw-alert-body">
+                  <span class="pw-alert-text">Add body content here</span>
+                  <div class="pw-prog-wrap">
+                    <div class="pw-prog-track"><div class="pw-prog-fill" style="width:10%"></div></div>
+                    <span class="pw-prog-pct">10%</span>
+                  </div>
+                  <div class="pw-alert-btns">
+                    <span class="pw-ghost-btn">Get Started</span>
+                    <span class="pw-ghost-btn">Get Started</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Alerts</h3>
+            <p class="comp-desc">Alerts show urgent messages needing attention; toasts show brief, less intrusive info like success or error.</p>
+          </div>
+        </div>
+
+        <!-- ② Button — LIVE -->
+        <a class="comp-card clickable" href="button.html">
+          <div class="comp-preview">
+            <div class="pw-btn">Get Started</div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Button</h3>
+            <p class="comp-desc">Trigger actions or events, such as submitting forms, opening dialogs, or navigating to other pages.</p>
+          </div>
+        </a>
+
+        <!-- ③ Breadcrumbs — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-bc">
+                <div class="pw-bc-row"><span class="pw-bc-cur">Home</span></div>
+                <div class="pw-bc-row">
+                  <span class="pw-bc-dim">Home</span>
+                  <span class="pw-bc-sep">/</span>
+                  <span class="pw-bc-cur">Page 1</span>
+                </div>
+                <div class="pw-bc-row">
+                  <span class="pw-bc-dim">Home</span>
+                  <span class="pw-bc-sep">/</span>
+                  <span class="pw-bc-dim">Page 1</span>
+                  <span class="pw-bc-sep">/</span>
+                  <span class="pw-bc-cur">Page 2</span>
+                </div>
+                <div class="pw-bc-row">
+                  <span class="pw-bc-dim">Home</span>
+                  <span class="pw-bc-sep">/</span>
+                  <span class="pw-bc-dim">...</span>
+                  <span class="pw-bc-sep">/</span>
+                  <span class="pw-bc-cur">Page X</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Breadcrumbs</h3>
+            <p class="comp-desc">The breadcrumbs component shows the user's location and allows quick access to previous levels.</p>
+          </div>
+        </div>
+
+        <!-- ④ Checkbox — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-cbs">
+                <div class="pw-cb-row">
+                  <div class="pw-cb checked">
+                    <svg viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
+                  <span class="pw-cb-label">Option 1</span>
+                </div>
+                <div class="pw-cb-row">
+                  <div class="pw-cb"></div>
+                  <span class="pw-cb-label">Option 2</span>
+                </div>
+                <div class="pw-cb-row">
+                  <div class="pw-cb"></div>
+                  <span class="pw-cb-label">Option 3</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Checkbox</h3>
+            <p class="comp-desc">Checkboxes let users select one or more options from a list, perfect for multi-selection and toggles.</p>
+          </div>
+        </div>
+
+        <!-- ⑤ Chips — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-chips">
+                <div class="pw-chip">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+                <div class="pw-chip sel">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+                <div class="pw-chip sel">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Chips</h3>
+            <p class="comp-desc">Chips are small UI elements representing tags, categories, or selections. They help users quickly filter or manage items.</p>
+          </div>
+        </div>
+
+        <!-- ⑥ Input Fields — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-input">
+                <div class="pw-lbl-row">
+                  <span class="pw-lbl">Label</span>
+                  <span class="pw-lbl-req">*</span>
+                  <div class="pw-lbl-info">i</div>
+                </div>
+                <div class="pw-input-box">
+                  <span class="pw-input-lead">✳</span>
+                  <span class="pw-placeholder">Placeholder</span>
+                  <span class="pw-input-trail">✕</span>
+                </div>
+                <div class="pw-caption-row">
+                  <div class="pw-caption-info">i</div>
+                  <span class="pw-caption">Description</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Input Fields</h3>
+            <p class="comp-desc">Input Fields are used for short, single-line inputs such as names, emails, and passwords.</p>
+          </div>
+        </div>
+
+        <!-- ⑦ Progress Bar — Coming Soon -->
+        <div class="comp-card">
+          <span class="coming-soon-chip">Coming Soon</span>
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-pbs">
+                <div class="pw-pb-row">
+                  <div class="pw-pb-track"><div class="pw-pb-fill" style="width:10%"></div></div>
+                  <span class="pw-pb-lbl">10%</span>
+                </div>
+                <div class="pw-pb-row">
+                  <div class="pw-pb-track"><div class="pw-pb-fill" style="width:50%"></div></div>
+                  <span class="pw-pb-lbl">50%</span>
+                </div>
+                <div class="pw-pb-row">
+                  <div class="pw-pb-track"><div class="pw-pb-fill" style="width:100%"></div></div>
+                  <span class="pw-pb-lbl">100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <h3 class="comp-name">Progress Bar</h3>
+            <p class="comp-desc">The Progress Bar shows task or process completion. It is a linear indicator used for uploads, form completion, or tracking.</p>
+          </div>
+        </div>
+
+      </div><!-- /.components-grid -->
+    </div><!-- /.components-card -->
+
+  </div><!-- /.main-scroll -->
+  </main>
+</div><!-- /.page -->
+
+<!-- ── Search Overlay ── -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-row">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round">
+        <circle cx="7.5" cy="7.5" r="5.5"/><path d="m12 12 4 4"/>
+      </svg>
+      <input
+        class="search-input"
+        id="searchInput"
+        type="text"
+        placeholder="Search components…"
+        oninput="renderSearchResults(this.value); searchFocusIdx=-1;"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="search-kbd" onclick="closeSearch()">Esc</div>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<script>
+const COMPONENTS = [
+  { name: 'Alerts',        desc: 'Toast notifications and alert banners',  url: '#',           live: false },
+  { name: 'Button',        desc: 'Trigger actions and events',             url: 'button.html', live: true  },
+  { name: 'Breadcrumbs',   desc: 'Navigation path indicator',              url: '#',           live: false },
+  { name: 'Checkbox',      desc: 'Multi-select option control',            url: '#',           live: false },
+  { name: 'Chips',         desc: 'Tags, categories and selections',        url: '#',           live: false },
+  { name: 'Input Fields',  desc: 'Text inputs and form fields',            url: '#',           live: false },
+  { name: 'Progress Bar',  desc: 'Task completion indicator',              url: '#',           live: false },
+];
+
+const COMP_ICONS = {
+  'Alerts':       `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><circle cx="9" cy="9" r="7"/><path d="M9 6v3.5"/><circle cx="9" cy="13" r=".6" fill="#006cb6" stroke="none"/></svg>`,
+  'Button':       `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><rect x="2" y="6" width="14" height="6" rx="3"/></svg>`,
+  'Breadcrumbs':  `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><path d="M3 9h12M10 5l4 4-4 4"/></svg>`,
+  'Checkbox':     `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="3" width="12" height="12" rx="3"/><path d="M6 9l2.5 2.5L12 7"/></svg>`,
+  'Chips':        `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><rect x="2" y="6" width="14" height="6" rx="3"/><circle cx="6" cy="9" r="1.5" fill="#006cb6" stroke="none"/></svg>`,
+  'Input Fields': `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><rect x="2" y="5" width="14" height="8" rx="3"/><path d="M6 9h6"/></svg>`,
+  'Progress Bar': `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round"><rect x="2" y="7" width="14" height="4" rx="2"/><rect x="2" y="7" width="7" height="4" rx="2" fill="#006cb6" stroke="none"/></svg>`,
+};
+
+let searchFocusIdx = -1;
+
+function openSearch() {
+  const overlay = document.getElementById('searchOverlay');
+  overlay.classList.add('open');
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  searchFocusIdx = -1;
+  renderSearchResults('');
+  requestAnimationFrame(() => input.focus());
+}
+
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('open');
+  searchFocusIdx = -1;
+}
+
+function highlight(text, q) {
+  if (!q) return text;
+  const re = new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi');
+  return text.replace(re, '<mark style="background:#deefff;color:#006cb6;border-radius:2px;padding:0 1px">$1</mark>');
+}
+
+function renderSearchResults(q) {
+  const resultsEl = document.getElementById('searchResults');
+  const matches = COMPONENTS.filter(c =>
+    c.name.toLowerCase().includes(q.toLowerCase()) ||
+    c.desc.toLowerCase().includes(q.toLowerCase())
+  );
+
+  if (matches.length === 0) {
+    resultsEl.innerHTML = `<div class="search-empty">No components match "<strong>${q}</strong>"</div>`;
+    return;
+  }
+
+  resultsEl.innerHTML = `
+    <div class="search-section-label">Components</div>
+    ${matches.map((c, i) => `
+      <${c.live ? `a href="${c.url}"` : 'div'} class="search-item" data-idx="${i}" onclick="${c.live ? 'closeSearch()' : ''}">
+        <div class="search-item-icon">${COMP_ICONS[c.name] || ''}</div>
+        <div class="search-item-body">
+          <div class="search-item-name">${highlight(c.name, q)}</div>
+          <div class="search-item-desc">${c.desc}</div>
+        </div>
+        <div class="search-item-badge ${c.live ? 'badge-live' : 'badge-soon'}">${c.live ? 'Live' : 'Coming Soon'}</div>
+      </${c.live ? 'a' : 'div'}>
+    `).join('')}
+  `;
+}
+
+// Keyboard: / to open, Esc to close, arrows + Enter to navigate
+document.addEventListener('keydown', e => {
+  const overlay = document.getElementById('searchOverlay');
+  const isOpen = overlay.classList.contains('open');
+
+  if (e.key === '/' && !isOpen && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+    e.preventDefault();
+    openSearch();
+    return;
+  }
+
+  if (!isOpen) return;
+
+  if (e.key === 'Escape') { closeSearch(); return; }
+
+  const items = overlay.querySelectorAll('.search-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchFocusIdx = Math.min(searchFocusIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('focused', i === searchFocusIdx));
+    if (items[searchFocusIdx]) items[searchFocusIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchFocusIdx = Math.max(searchFocusIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('focused', i === searchFocusIdx));
+    if (items[searchFocusIdx]) items[searchFocusIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' && searchFocusIdx >= 0 && items[searchFocusIdx]) {
+    items[searchFocusIdx].click();
+  }
+});
+
+// Search bar click
+document.querySelector('.hdr-search').addEventListener('click', openSearch);
+</script>
+
+</body>
+</html>
