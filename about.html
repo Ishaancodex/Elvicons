@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About Us — ELF Design System 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="fav-icon.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @view-transition { navigation: auto; }
+    @keyframes fade-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+    ::view-transition-old(root) { animation: 180ms ease-in  fade-out; }
+    ::view-transition-new(root) { animation: 220ms ease-out fade-in; }
+    body { animation: fade-in 220ms ease-out backwards; }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Manrope', sans-serif;
+      color: #0d121c;
+      background: white;
+      min-width: 1440px;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    /* ══════════════════════════════════════════
+       NAVBAR — Pill shape, centered, fixed
+    ══════════════════════════════════════════ */
+    .navbar {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1008px;
+      height: 84px;
+      display: flex;
+      align-items: center;
+      padding: 20px 24px;
+      gap: 32px;
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 400px;
+      box-shadow: 0px 12px 40px rgba(0,108,182,0.12);
+      z-index: 200;
+    }
+    .nav-brand {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-brand-icon {
+      width: 36px;
+      height: 36px;
+      background: #006cb6;
+      border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden;
+    }
+    .nav-brand-icon img { width: 24px; height: 24px; display: block; }
+    .nav-brand-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .nav-brand-name .elf { color: #006cb6; }
+    .nav-links {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: #364152;
+      padding: 12px 24px;
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      white-space: nowrap;
+      transition: color 0.12s;
+    }
+    .nav-links a:hover { color: #0d121c; }
+    .nav-links a.active { color: #006cb6; }
+
+    /* ══════════════════════════════════════════
+       PAGE WRAPPER
+    ══════════════════════════════════════════ */
+    .page {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* ══ Background layer helpers ══ */
+    .bg-layer {
+      position: absolute;
+      left: 0; right: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-layer img.cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .clouds-img {
+      position: absolute;
+      left: -28.47%;
+      top: -90.26%;
+      width: 166.11%;
+      height: 174.85%;
+      max-width: none;
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════
+       HERO SECTION — height: 720px (full illustration)
+    ══════════════════════════════════════════ */
+    .s-hero {
+      height: 720px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ══════════════════════════════════════════
+       TEAM SECTION — transparent so clouds show
+    ══════════════════════════════════════════ */
+    .s-team {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      padding-top: 32px;
+      padding-bottom: 120px;
+    }
+
+    /* Heading block — 640px centered, Figma 226:15228 */
+    .team-heading-block {
+      width: 640px;
+      margin: 0 auto;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 120px;
+    }
+    .team-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 56px;
+      line-height: 72px;
+      color: #0d121c;
+    }
+    .team-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.5px;
+    }
+
+    /* Team cards grid — 1300px inner, 2 columns */
+    .team-grid {
+      width: 1300px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    /* Glassmorphism team card — Figma 226:13553/13556 */
+    .team-card {
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid #e9eaeb;
+      border-radius: 30px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .team-photo-wrap {
+      aspect-ratio: 602 / 470;
+      border-radius: 30px;
+      overflow: hidden;
+      width: 100%;
+      flex-shrink: 0;
+    }
+    .team-photo-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .team-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 24px;
+      color: #006cb6;
+    }
+    .team-bio {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.5px;
+    }
+
+    /* ══════════════════════════════════════════
+       CONTENT CONTAINER
+    ══════════════════════════════════════════ */
+    .inner {
+      width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* ══════════════════════════════════════════
+       SECTION HEADINGS
+    ══════════════════════════════════════════ */
+    .sec-heading {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    /* ══════════════════════════════════════════
+       CONTRIBUTE SECTION — copied from home.html
+    ══════════════════════════════════════════ */
+    .s-contribute {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      padding-top: 40px;
+      padding-bottom: 120px;
+    }
+    .contribute-card {
+      position: relative;
+      width: 1300px;
+      height: 320px;
+      border-radius: 12px;
+      border: 1px solid #e9eaeb;
+      background-color: rgba(255,255,255,0.92);
+      background-image: radial-gradient(circle, rgba(0,108,182,0.10) 1.5px, transparent 1.5px);
+      background-size: 24px 24px;
+      overflow: hidden;
+    }
+    .contribute-content {
+      position: absolute;
+      left: 408px;
+      top: 53px;
+      width: 484px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      text-align: center;
+      z-index: 2;
+    }
+    .contribute-texts {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .contribute-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 24px;
+      line-height: 32px;
+      color: #0d121c;
+    }
+    .contribute-sub {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+      width: 430px;
+    }
+    .btn-start {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #006cb6;
+      color: white;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 11px 24px;
+      border-radius: 8px;
+      box-shadow: 0px 4px 12px rgba(0,108,182,0.2);
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-start:hover { background: #025085; transform: translateY(-1px); }
+
+    /* ══════════════════════════════════════════
+       FOOTER — copied from home.html
+    ══════════════════════════════════════════ */
+    .site-footer {
+      position: relative;
+      z-index: 1;
+      background: white;
+      height: 176px;
+    }
+    .footer-wave {
+      height: 16px;
+      overflow: hidden;
+    }
+    .footer-wave img { width: 100%; height: 16px; object-fit: cover; display: block; }
+    .footer-inner {
+      width: 1300px;
+      margin: 0 auto;
+      padding-top: 48px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .footer-brand { display: flex; flex-direction: column; gap: 12px; }
+    .footer-logo { display: flex; align-items: center; gap: 12px; }
+    .footer-logo-icon {
+      width: 36px; height: 36px;
+      background: #006cb6; border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden; flex-shrink: 0;
+    }
+    .footer-logo-icon img { width: 24px; height: 24px; display: block; }
+    .footer-logo-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .footer-logo-name .elf { color: #006cb6; }
+    .footer-tagline {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+    }
+    .footer-nav { display: flex; align-items: center; padding-top: 6px; }
+    .footer-nav a {
+      padding: 12px 24px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.15px;
+      transition: color 0.12s;
+    }
+    .footer-nav a:hover { color: #006cb6; }
+    .footer-nav a.active { color: #006cb6; }
+    /* ── Page Loader ─── */
+    #page-loader { position: fixed; inset: 0; z-index: 9999; background: white; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+    #page-loader.loaded { opacity: 0; pointer-events: none; }
+    #lottie-anim { width: 200px; height: 200px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="page-loader"><div id="lottie-anim"></div></div>
+
+<!-- ════════════════════════════════════════════
+     NAVBAR — Fixed pill, 1008×84px, centered
+════════════════════════════════════════════ -->
+<nav class="navbar">
+  <a class="nav-brand" href="home.html">
+    <div class="nav-brand-icon">
+      <img src="home-assets/elvicons-logo.png" alt="" />
+    </div>
+    <span class="nav-brand-name"><span class="elf">Elf</span> Design System.</span>
+  </a>
+  <div class="nav-links">
+    <a href="home.html">Home</a>
+    <a href="components.html">Components</a>
+    <a href="about.html" class="active">About Us</a>
+    <a href="feedback.html">Feedback</a>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE WRAPPER
+════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── BACKGROUND: Hero illustration (y=0, h=720) ── -->
+  <div class="bg-layer" style="top:0; height:720px;">
+    <img class="cover" src="about-assets/hero-image.webp" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Wave separator at bottom of hero (y=646, h=95) ── -->
+  <div class="bg-layer" style="top:646px; height:95px; z-index:1;">
+    <img class="cover" src="home-assets/seperator.svg" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Clouds behind team section (y=720, h=1003) ── -->
+  <div class="bg-layer" style="top:720px; height:1003px; z-index:0;">
+    <img class="clouds-img" src="home-assets/clouds.png" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Wave separator before contribute section ── -->
+  <div class="bg-layer" style="top:1770px; height:95px; z-index:1;">
+    <img class="cover" src="home-assets/seperator.svg" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Clouds behind contribute section ── -->
+  <div class="bg-layer" style="top:1720px; height:1003px; z-index:0;">
+    <img class="clouds-img" src="home-assets/clouds.png" alt="" />
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       HERO SECTION — h=720px (full-bleed illustration)
+  ════════════════════════════════════════════ -->
+  <section class="s-hero"></section>
+
+
+  <!-- ════════════════════════════════════════════
+       TEAM SECTION — Figma y=752..1678
+       Heading at y=752, Cards at y=1056
+  ════════════════════════════════════════════ -->
+  <section class="s-team">
+
+    <!-- Heading block: 640px wide, centered — Figma 226:15228 -->
+    <div class="team-heading-block">
+      <h1 class="team-title">Meet the team that makes the magic happen</h1>
+      <p class="team-subtitle">Meet our diverse team of world-class designers and problem solvers.</p>
+    </div>
+
+    <!-- Two team cards — Figma 226:13553 (Ishaan) + 226:13556 (Aditya) -->
+    <div class="team-grid">
+
+      <!-- Ishaan's card — Figma 226:13553 -->
+      <div class="team-card">
+        <div class="team-photo-wrap">
+          <img src="about-assets/ishaan.png" alt="Ishaan Sharma" />
+        </div>
+        <p class="team-name">Ishaan Sharma aka Chota Bhai</p>
+        <p class="team-bio">Hi, I'm Ishaan Sharma who loves solving problems through design and is equally curious about product planning, implementation, and strategy ensuring solutions are both user-friendly and business-ready.</p>
+      </div>
+
+      <!-- Aditya's card — Figma 226:13556 -->
+      <div class="team-card">
+        <div class="team-photo-wrap">
+          <img src="about-assets/aditya.png" alt="Aditya Aggarwal" />
+        </div>
+        <p class="team-name">Aditya Aggarwal aka Bade Bhai</p>
+        <p class="team-bio">Hi, I'm Aditya Aggarwal, a design enthusiast passionate about creating intuitive and visually appealing user interfaces that solve real-world problems.</p>
+      </div>
+
+    </div><!-- .team-grid -->
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       CONTRIBUTE SECTION — Figma 226:15240 (heading) + 226:13568 (card)
+       Exact copy from home.html
+  ════════════════════════════════════════════ -->
+  <section class="s-contribute">
+
+    <div class="inner">
+      <h2 class="sec-heading">Wondering how to contribute</h2>
+      <img
+        src="home-assets/Vector 2.svg"
+        alt=""
+        style="position:absolute; left:280px; top: 75px;"
+      >
+
+      <div class="contribute-card">
+
+        <div class="contribute-content">
+          <div class="contribute-texts">
+            <p class="contribute-title">We welcome all feedback, designs, or ideas in order to produce the best possible experience for our users.</p>
+            <p class="contribute-sub">If you're interested in contributing, check out our contributing guidelines to get started.</p>
+          </div>
+          <a href="feedback.html" class="btn-start">Start Contributing</a>
+        </div>
+
+        <!-- Hand image -->
+        <img
+          src="home-assets/hand.png"
+          alt=""
+          style="position:absolute; left:620px; top:200px; width:49px; height:139px; z-index:2; pointer-events:none; scale: 0.75;"
+        />
+
+        <!-- Aditya cursor chip -->
+        <img
+          src="home-assets/aditya.png"
+          alt=""
+          style="position:absolute; left:150px; top:-32px; scale: 0.25;"
+        />
+
+        <!-- Ishaan cursor chip -->
+        <img
+          src="home-assets/ishaan.png"
+          alt=""
+          style="position:absolute; left:750px; top:80px; scale: 0.25;"
+        />
+
+        <!-- Heart sticker -->
+        <img
+          src="home-assets/Heart.png"
+          alt=""
+          style="position:absolute; left:120px; top: 73px; scale: 0.25;"
+        />
+
+        <!-- Eyes sticker -->
+        <img
+          src="home-assets/👀.png"
+          alt=""
+          style="position:absolute; left:150px; top: 150px; scale: 0.25;"
+        />
+
+        <!-- Star sticker -->
+        <img
+          src="home-assets/Star.png"
+          alt=""
+          style="position:absolute; left:1013px; top: -48px; scale: 0.25;"
+        />
+
+        <!-- Thumbs up sticker -->
+        <img
+          src="home-assets/Thumbs up.png"
+          alt=""
+          style="position:absolute; left:1020px; top: 100px; scale: 0.25;"
+        />
+
+        <!-- +1 sticker -->
+        <img
+          src="home-assets/+1.png"
+          alt=""
+          style="position:absolute; left:-50px; top: 120px; scale: 0.25;"
+        />
+
+      </div><!-- .contribute-card -->
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       FOOTER — Figma 226:15242
+       Exact copy from home.html, "About Us" active
+  ════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="footer-wave">
+      <img src="home-assets/footer.svg" alt="" />
+    </div>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="home.html" class="footer-logo">
+          <div class="footer-logo-icon">
+            <img src="home-assets/elvicons-logo.png" alt="" />
+          </div>
+          <span class="footer-logo-name"><span class="elf">Elf</span> Design System.</span>
+        </a>
+        <p class="footer-tagline">Hand-crafted with love by Ishaan Sharma.</p>
+      </div>
+      <nav class="footer-nav">
+        <a href="home.html">Home</a>
+        <a href="components.html">Components</a>
+        <a href="about.html" class="active">About Us</a>
+        <a href="feedback.html">Feedback</a>
+      </nav>
+    </div>
+  </footer>
+
+</div><!-- .page -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  (function() {
+    var anim = lottie.loadAnimation({ container: document.getElementById('lottie-anim'), renderer: 'svg', loop: true, autoplay: true, path: 'loader.json' });
+    var t0 = Date.now();
+    window.addEventListener('load', function() {
+      var delay = Math.max(0, 600 - (Date.now() - t0));
+      setTimeout(function() {
+        var el = document.getElementById('page-loader');
+        el.classList.add('loaded');
+        el.addEventListener('transitionend', function() { el.remove(); anim.destroy(); }, { once: true });
+      }, delay);
+    });
+  })();
+</script>
+</body>
+</html>

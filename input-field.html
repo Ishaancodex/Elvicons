@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Input Field — ELF Design System 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="fav-icon.svg">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @view-transition { navigation: auto; }
+    @keyframes fade-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+    ::view-transition-old(root) { animation: 180ms ease-in  fade-out; }
+    ::view-transition-new(root) { animation: 220ms ease-out fade-in;  }
+    body { animation: fade-in 220ms ease-out both; }
+
+    :root {
+      --brand:       #006cb6;
+      --brand-dk:    #025085;
+      --brand-lt:    #deefff;
+      --text-1:      #0d121c;
+      --text-2:      #364152;
+      --text-3:      #9aa4b2;
+      --disabled:    #a3a7ae;
+      --bg:          #eef1f6;
+      --surface:     #ffffff;
+      --border:      #e9eaeb;
+      --shadow:      0px 12px 40px rgba(0,108,182,0.12);
+      --shadow-sm:   0px 4px 16px rgba(0,108,182,0.08);
+      --r-card:      12px;
+      --r-btn:       8px;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); }
+    body { font-family: 'Manrope', sans-serif; color: var(--text-1); display: flex; flex-direction: column; padding-top: 68px; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }
+
+    /* ── Header ── */
+    .hdr { height: 68px; background: rgba(255,255,255,0.6); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid rgba(233,234,235,0.7); box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 24px; flex-shrink: 0; position: fixed; top: 0; left: 0; right: 0; z-index: 100; }
+    .logo-wrap { display: flex; align-items: center; gap: 12px; width: 280px; flex-shrink: 0; }
+    .logo-e { width: 36px; height: 36px; background: var(--brand); border: 1.5px solid var(--brand-dk); border-radius: var(--r-card); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .logo-e span { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 20px; color: white; line-height: 1; margin-top: 1px; }
+    .logo-text { font-family: 'Instrument Serif', serif; font-size: 22px; line-height: 1; white-space: nowrap; }
+    .logo-text .elf { color: var(--brand); }
+    .logo-text .ds { color: var(--text-1); }
+    .hdr-nav { flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .nav-item { display: inline-block; text-decoration: none; padding: 10px 20px; font-size: 14px; font-weight: 400; color: var(--text-2); letter-spacing: 0.25px; cursor: pointer; border-radius: 6px; transition: color 0.12s; white-space: nowrap; }
+    .nav-item:hover { color: var(--text-1); }
+    .nav-item.active { color: var(--brand); font-weight: 500; letter-spacing: 0.1px; }
+    .hdr-search { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 7px 12px; width: 200px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .search-icon { color: var(--text-3); flex-shrink: 0; display: flex; }
+    .search-placeholder { font-size: 14px; color: var(--text-3); flex: 1; }
+    .search-slash { background: #f8fafc; border-radius: 3.6px; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; color: var(--disabled); flex-shrink: 0; }
+    .hdr-user { display: flex; align-items: center; gap: 10px; margin-left: 20px; flex-shrink: 0; }
+    .user-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #006cb6, #0096e6); display: flex; align-items: center; justify-content: center; color: white; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .user-info { line-height: 1.3; }
+    .user-name { font-size: 13px; font-weight: 600; color: var(--text-1); display: block; }
+    .user-role { font-size: 11px; color: #4d4d4f; letter-spacing: -0.24px; }
+    .chevron-icon { color: var(--text-3); }
+
+    /* ── Layout ── */
+    .page { display: flex; flex: 1; overflow: hidden; }
+    .sidebar { width: 252px; padding: 24px 24px 0; overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; }
+    .sidebar-card { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow); padding: 20px 16px; display: flex; flex-direction: column; gap: 20px; position: relative; overflow: hidden; flex: 1; min-height: 0; }
+    .sb-title { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 22px; line-height: 28px; color: var(--text-3); flex-shrink: 0; }
+    .sb-divider { height: 0; border-bottom: 1px dashed var(--border); flex-shrink: 0; }
+    .sb-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .sb-item { display: block; text-decoration: none; padding: 10px 16px; border-radius: var(--r-btn); font-size: 13.5px; font-weight: 400; color: var(--text-2); cursor: pointer; transition: background 0.12s, color 0.12s; letter-spacing: 0.25px; }
+    .sb-item:hover { background: var(--bg); }
+    .sb-item.active { background: var(--brand-lt); color: var(--brand); font-weight: 500; letter-spacing: 0.1px; }
+    .sb-footer { font-family: 'Instrument Serif', serif; font-size: 14px; color: var(--text-3); padding: 12px 0 4px; flex-shrink: 0; position: relative; z-index: 1; }
+    .sb-watermark { position: absolute; bottom: -50px; left: -55px; width: 243px; height: 243px; background: var(--brand); border: 6.75px solid var(--brand-dk); border-radius: 81px; opacity: 0.05; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .sb-watermark-e { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 120px; color: white; line-height: 1; }
+
+    .main { flex: 1; overflow: hidden; display: flex; min-width: 0; }
+    .main-scroll { flex: 1; overflow: hidden; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+    .card { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow); overflow: hidden; flex-shrink: 0; }
+    .variants-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+    /* ── Component header ── */
+    .comp-head { padding: 14px 20px 0; }
+    .comp-title { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 22px; line-height: 26px; color: var(--text-1); margin-bottom: 6px; }
+    .comp-desc { font-size: 14px; font-weight: 400; color: var(--text-2); line-height: 22px; letter-spacing: 0.3px; margin-bottom: 12px; }
+    .comp-tabs { display: flex; border-top: 1px solid var(--border); }
+    .comp-tab { padding: 10px 20px; font-size: 13px; font-weight: 400; color: var(--text-2); cursor: pointer; border-bottom: 2px solid transparent; letter-spacing: 0.25px; transition: color 0.12s; }
+    .comp-tab:hover { color: var(--text-1); }
+    .comp-tab.active { color: var(--brand); font-weight: 500; border-bottom-color: var(--brand); letter-spacing: 0.1px; }
+
+    /* ── Variants card ── */
+    .variants-head { padding: 14px 20px 10px; flex-shrink: 0; }
+    .variants-title { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; line-height: 24px; color: var(--text-3); }
+    .filter-row { padding: 0 20px 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; flex-shrink: 0; }
+    .filter-group-item { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+    .filter-label-text { font-size: 11.5px; font-weight: 600; color: var(--text-3); letter-spacing: 0.5px; text-transform: uppercase; }
+    .filter-select-wrap { position: relative; }
+    .filter-select { width: 100%; height: 36px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-btn); padding: 0 32px 0 12px; font-size: 13px; font-family: 'Manrope', sans-serif; font-weight: 500; color: var(--text-2); appearance: none; -webkit-appearance: none; cursor: pointer; outline: none; transition: border-color 0.12s, box-shadow 0.12s; }
+    .filter-select:hover { border-color: #c4c9d1; }
+    .filter-select:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(0,108,182,0.1); }
+    .select-chevron { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-3); }
+
+    /* ── Toggle switch ── */
+    .toggle-wrap { display: flex; align-items: center; gap: 9px; height: 36px; }
+    .toggle-switch { position: relative; width: 40px; height: 22px; cursor: pointer; display: inline-block; flex-shrink: 0; }
+    .toggle-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .toggle-track { position: absolute; inset: 0; background: #d0d5dd; border-radius: 11px; transition: background 0.18s; }
+    .toggle-switch input:checked + .toggle-track { background: var(--brand); }
+    .toggle-thumb { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.15); transition: left 0.18s; }
+    .toggle-switch input:checked + .toggle-track .toggle-thumb { left: 21px; }
+    .toggle-yn { font-size: 13px; font-weight: 500; color: var(--text-2); min-width: 20px; }
+
+    .variants-divider { height: 0; border-bottom: 1px dashed var(--border); margin: 0 20px; }
+
+    /* ── Artboard / Code ── */
+    .ac-row { display: flex; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+    .ac-artboard { flex: 0 0 50%; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-height: 0; }
+    .ac-code-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    .ac-section-label { padding: 12px 16px 10px; font-family: 'Instrument Serif', serif; font-style: italic; font-size: 16px; color: var(--text-3); flex-shrink: 0; border-bottom: 1px solid var(--border); }
+    .ac-preview { flex: 1; min-height: 0; background-image: radial-gradient(circle, rgba(0,108,182,0.15) 1.5px, transparent 1.5px); background-size: 22px 22px; background-color: #fafcff; display: flex; align-items: center; justify-content: center; padding: 32px; overflow-y: auto; }
+    .ac-tags { padding: 10px 16px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; border-top: 1px solid var(--border); flex-shrink: 0; }
+    .p-abtag { font-size: 11px; font-weight: 500; color: var(--text-3); }
+    .p-abtag.hi { color: var(--brand); font-weight: 600; }
+    .p-abtag-dot { color: #d1d5db; font-size: 10px; }
+    .ac-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; flex-shrink: 0; }
+    .ac-tab { padding: 8px 14px; font-size: 12.5px; font-weight: 400; color: var(--text-3); cursor: pointer; border: none; border-bottom: 2px solid transparent; background: none; font-family: 'Manrope', sans-serif; transition: color 0.12s; margin-bottom: -1px; }
+    .ac-tab:hover { color: var(--text-2); }
+    .ac-tab.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 500; }
+    .ac-code-wrap { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+    .copy-btn { position: sticky; top: 12px; float: right; z-index: 4; background: white; color: var(--text-3); border: 1.5px solid var(--border); border-radius: 6px; padding: 5px 10px 5px 8px; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Manrope', sans-serif; transition: all 0.12s; display: flex; align-items: center; gap: 5px; margin: 12px 16px 0 0; box-shadow: var(--shadow-sm); }
+    .copy-btn:hover { border-color: var(--brand); color: var(--brand); }
+    .copy-btn.ok { color: #16a34a; border-color: #86efac; background: #f0fdf4; }
+    .code-table { padding: 12px 16px 20px; width: 100%; }
+    .code-line { display: flex; gap: 0; min-height: 20px; }
+    .ln { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; color: #d1d5db; text-align: right; width: 28px; flex-shrink: 0; user-select: none; padding-right: 6px; }
+    .lc { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 20px; color: var(--text-2); white-space: pre; flex: 1; padding-left: 8px; }
+    .kw  { color: #7c3aed; }
+    .cls { color: var(--brand); }
+    .str { color: #16a34a; }
+    .num { color: #dc2626; }
+    .cmt { color: #9aa4b2; font-style: italic; }
+    .prm { color: #d97706; }
+
+    /* ── Input field live preview component ── */
+    .if-wrap { display: flex; flex-direction: column; gap: 4px; width: 260px; font-family: 'Manrope', sans-serif; }
+    .if-label-row { display: flex; align-items: center; gap: 4px; }
+    .if-label-text { font-size: 14px; font-weight: 600; color: #0d121c; line-height: 18px; }
+    .if-mandatory { font-size: 14px; font-weight: 600; color: #d92d2d; line-height: 18px; }
+    .if-container { background: white; border: 1px solid; border-radius: 8px; display: flex; align-items: center; gap: 4px; padding: 10px 12px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s; }
+    .if-inner { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; }
+    .if-input-text { flex: 1; font-size: 14px; font-weight: 400; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .if-caption-row { display: flex; align-items: center; gap: 4px; }
+    .if-caption-text { font-size: 14px; font-weight: 400; line-height: 18px; }
+
+    /* ── Status ── */
+    .status-scroll { flex: 1; min-height: 0; overflow: hidden; display: none; flex-direction: column; border-radius: var(--r-card); box-shadow: var(--shadow); background: var(--surface); }
+    .status-scroll.visible { display: flex; }
+    .status-inner { flex: 1; min-height: 0; overflow-y: auto; padding: 28px 32px 48px; }
+    .status-entry { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px dashed var(--border); }
+    .status-entry:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .status-version { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 26px; font-weight: 400; color: var(--text-1); letter-spacing: -0.2px; margin-bottom: 16px; line-height: 1; }
+    .status-group { margin-bottom: 14px; }
+    .status-group:last-child { margin-bottom: 0; }
+    .status-group-label { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); margin-bottom: 8px; }
+    .status-items { display: flex; flex-direction: column; gap: 7px; }
+    .status-item { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; color: var(--text-2); line-height: 20px; }
+    .status-bullet { width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); flex-shrink: 0; margin-top: 8px; }
+    .status-item strong { color: var(--text-1); font-weight: 600; }
+    .status-item code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: var(--brand-lt); padding: 1px 5px; border-radius: 3px; color: var(--brand); }
+
+    /* ── Documentation ── */
+    .doc-scroll { flex: 1; min-height: 0; overflow-y: auto; display: none; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+    .doc-scroll.visible { display: flex; }
+    .doc-card { background: var(--surface); border-radius: var(--r-card); box-shadow: var(--shadow); overflow: hidden; flex-shrink: 0; }
+    .doc-card-head { padding: 14px 20px 12px; border-bottom: 1px dashed var(--border); }
+    .doc-card-title { font-family: 'Instrument Serif', serif; font-style: italic; font-size: 18px; color: var(--text-3); line-height: 24px; }
+    .doc-card-body { padding: 20px; }
+    .doc-overview-desc { font-size: 14px; line-height: 22px; color: var(--text-2); letter-spacing: 0.2px; max-width: 680px; margin-bottom: 16px; }
+    .doc-prop-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .doc-prop-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); font-size: 12px; color: var(--text-2); }
+    .doc-prop-tag strong { font-weight: 700; color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+
+    /* Sizes showcase */
+    .sizes-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .size-cell { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .size-preview { padding: 24px 20px; min-height: 100px; display: flex; align-items: center; justify-content: center; background-image: radial-gradient(circle, rgba(0,108,182,0.10) 1.5px, transparent 1.5px); background-size: 20px 20px; background-color: #fafcff; }
+    .size-meta { padding: 10px 14px; border-top: 1px dashed var(--border); }
+    .size-name { font-size: 13px; font-weight: 600; color: var(--text-1); margin-bottom: 3px; }
+    .size-desc { font-size: 11.5px; color: var(--text-3); line-height: 17px; }
+
+    /* States grid */
+    .states-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .state-cell { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .state-preview { padding: 16px 12px; min-height: 100px; display: flex; align-items: center; justify-content: center; background-image: radial-gradient(circle, rgba(0,108,182,0.10) 1.5px, transparent 1.5px); background-size: 18px 18px; background-color: #fafcff; }
+    .state-meta { padding: 8px 12px; border-top: 1px dashed var(--border); }
+    .state-name { font-size: 12px; font-weight: 600; color: var(--text-1); margin-bottom: 2px; }
+    .state-desc { font-size: 11px; color: var(--text-3); line-height: 16px; }
+
+    /* Anatomy */
+    .anatomy-stage { background-image: radial-gradient(circle, rgba(0,108,182,0.13) 1.5px, transparent 1.5px); background-size: 22px 22px; background-color: #fafcff; border-radius: 8px; padding: 56px 20px 36px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+    .anatomy-wrapper { position: relative; display: inline-flex; flex-direction: column; gap: 4px; padding-top: 28px; }
+    .a-badge { width: 18px; height: 18px; border-radius: 50%; background: white; border: 1.5px solid var(--brand); color: var(--brand); font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; font-family: 'Manrope', sans-serif; position: absolute; z-index: 3; box-shadow: 0 1px 4px rgba(0,108,182,0.18); }
+    .anatomy-legend { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+    .al-item { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-2); }
+    .al-badge { width: 18px; height: 18px; border-radius: 50%; background: var(--brand-lt); border: 1.5px solid var(--brand); color: var(--brand); font-size: 9px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; font-family: 'Manrope', sans-serif; flex-shrink: 0; }
+
+    /* Usage */
+    .usage-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .usage-col { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+    .usage-col-head { padding: 9px 14px; display: flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; border-bottom: 1px solid; }
+    .usage-do .usage-col-head { background: #f0fdf4; color: #15803d; border-bottom-color: #bbf7d0; }
+    .usage-dont .usage-col-head { background: #fff1f0; color: #b91c1c; border-bottom-color: #fecaca; }
+    .usage-items { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; background: white; }
+    .usage-item { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--text-2); line-height: 18px; }
+    .usage-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; margin-top: 7px; }
+    .usage-do .usage-dot { background: #16a34a; }
+    .usage-dont .usage-dot { background: #dc2626; }
+
+    /* ── Search Overlay ── */
+    .search-overlay { display: none; position: fixed; inset: 0; background: rgba(13,18,28,0.45); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 500; align-items: flex-start; justify-content: center; padding-top: 100px; }
+    .search-overlay.open { display: flex; animation: fade-in 150ms ease-out both; }
+    .search-modal { background: var(--surface); border-radius: 16px; box-shadow: 0px 32px 80px rgba(0,0,0,0.22), 0px 8px 24px rgba(0,108,182,0.12); width: 580px; max-height: 500px; display: flex; flex-direction: column; overflow: hidden; animation: srch-in 180ms cubic-bezier(0.34,1.56,0.64,1) both; }
+    @keyframes srch-in { from { opacity: 0; transform: scale(0.95) translateY(-8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    .search-input-row { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .search-input-row svg { color: var(--text-3); flex-shrink: 0; }
+    .search-input { flex: 1; border: none; outline: none; font-family: 'Manrope', sans-serif; font-size: 15px; color: var(--text-1); background: transparent; }
+    .search-input::placeholder { color: var(--text-3); }
+    .search-kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 600; color: var(--text-3); cursor: pointer; flex-shrink: 0; }
+    .search-results { overflow-y: auto; padding: 8px; flex: 1; }
+    .search-section-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-3); padding: 10px 12px 6px; }
+    .search-item { display: flex; align-items: center; gap: 14px; padding: 11px 12px; border-radius: 10px; cursor: pointer; transition: background 0.1s; text-decoration: none; color: inherit; }
+    .search-item:hover { background: #f0f7ff; }
+    .search-item-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--brand-lt); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .search-item-body { flex: 1; min-width: 0; }
+    .search-item-name { font-size: 14px; font-weight: 600; color: var(--text-1); }
+    .search-item-desc { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+    .search-item-badge { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; flex-shrink: 0; }
+    .badge-live { background: #e8f7ef; color: #15b36a; }
+    .badge-soon { background: var(--brand-lt); color: var(--brand); }
+    .search-empty { padding: 40px 20px; text-align: center; color: var(--text-3); font-size: 14px; }
+    /* ── Page Loader ─── */
+    #page-loader { position: fixed; inset: 0; z-index: 9999; background: var(--bg, #eef1f6); display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+    #page-loader.loaded { opacity: 0; pointer-events: none; }
+    #lottie-anim { width: 200px; height: 200px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="page-loader"><div id="lottie-anim"></div></div>
+
+<!-- ── Search Overlay ── -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-row">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="5.5"/><path d="m12 12 4 4"/></svg>
+      <input class="search-input" id="searchInput" placeholder="Search components…" oninput="filterSearch(this.value)" autocomplete="off">
+      <span class="search-kbd" onclick="closeSearch()">Esc</span>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header class="hdr">
+  <div class="logo-wrap">
+    <div class="logo-e"><span>E</span></div>
+    <div class="logo-text"><span class="elf">Elf</span><span class="ds"> Design System.</span></div>
+  </div>
+  <nav class="hdr-nav">
+    <a class="nav-item" href="home.html">Home</a>
+    <a class="nav-item active" href="components.html">Components</a>
+    <a class="nav-item" href="about.html">About Us</a>
+    <a class="nav-item" href="feedback.html">Feedback</a>
+  </nav>
+  <div class="hdr-search" onclick="openSearch()" style="cursor:pointer;">
+    <span class="search-icon"><svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="5.5"/><path d="m12 12 4 4"/></svg></span>
+    <span class="search-placeholder">Search...</span>
+    <span class="search-slash">/</span>
+  </div>
+  <div class="hdr-user">
+    <div class="user-avatar">I</div>
+    <div class="user-info"><span class="user-name">Ishaan</span><span class="user-role">Design</span></div>
+    <span class="chevron-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><polyline points="4,6 8,10 12,6"/></svg></span>
+  </div>
+</header>
+
+<!-- ── Page ── -->
+<div class="page">
+
+  <aside class="sidebar">
+    <div class="sidebar-card">
+      <div class="sb-title">Components Library</div>
+      <div class="sb-divider"></div>
+      <nav class="sb-nav">
+        <a class="sb-item" href="components.html">Overview</a>
+        <a class="sb-item" href="alerts.html">Alerts</a>
+        <a class="sb-item" href="button.html">Button</a>
+        <a class="sb-item" href="breadcrumbs.html">Breadcrumbs</a>
+        <a class="sb-item" href="checkbox.html">Checkbox</a>
+        <a class="sb-item" href="chips.html">Chips</a>
+        <a class="sb-item" href="icons.html">Icons</a>
+        <a class="sb-item active" href="input-field.html">Input Fields</a>
+        <a class="sb-item" href="progress-bar.html">Progress Bar</a>
+      </nav>
+      <div class="sb-footer">Made with ❤️ in India</div>
+      <div class="sb-watermark"><span class="sb-watermark-e">E</span></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="main-scroll">
+
+      <!-- Header card -->
+      <div class="card">
+        <div class="comp-head">
+          <div class="comp-title">Input Field</div>
+          <div class="comp-desc">Input Fields are used for short, single-line inputs such as names, emails, and passwords.</div>
+        </div>
+        <div class="comp-tabs">
+          <div class="comp-tab" id="tabDoc" onclick="switchMainTab('doc')">Documentation</div>
+          <div class="comp-tab active" id="tabCode" onclick="switchMainTab('code')">Code</div>
+          <div class="comp-tab" id="tabStatus" onclick="switchMainTab('status')">Status &amp; Change logs</div>
+        </div>
+      </div>
+
+      <!-- ── Status ── -->
+      <div class="status-scroll" id="statusContent">
+        <div class="status-inner">
+          <div class="status-entry">
+            <div class="status-version">4.15.26</div>
+            <div class="status-group">
+              <div class="status-group-label">None-breaking</div>
+              <div class="status-items">
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> Input Field component with 3 sizes (S, M, L) and 8 interaction states.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> <code>size</code> prop: <code>s</code> (40px), <code>m</code> (44px), <code>l</code> (48px).</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> <code>state</code> prop: <code>empty</code>, <code>filled</code>, <code>hover</code>, <code>focused</code>, <code>success</code>, <code>alert</code>, <code>error</code>, <code>read-only</code>.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> <code>label</code>, <code>labelIcon</code>, <code>mandatory</code> props for the label row.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> <code>leftIcon</code> and <code>rightIcon</code> props for leading/trailing icons inside the input.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> <code>caption</code> prop to show state-appropriate helper text below the field.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> Focus ring: <code>box-shadow 0 0 0 4px rgba(0,108,182,0.4)</code> on focused state.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> ELF Flutter component <code>ElfInputField</code> with complete prop API.</span></div>
+                <div class="status-item"><span class="status-bullet"></span><span><strong>Added</strong> Raw Flutter code generation using <code>TextField</code> / <code>InputDecoration</code>.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Documentation ── -->
+      <div class="doc-scroll" id="docContent">
+
+        <!-- Overview -->
+        <div class="doc-card">
+          <div class="doc-card-head"><span class="doc-card-title">Overview</span></div>
+          <div class="doc-card-body">
+            <p class="doc-overview-desc">Input Fields allow users to enter short, single-line text. They support a label with optional mandatory marker and info icon, a leading icon inside the field, a trailing icon (typically a dropdown indicator), and a contextual caption below that changes color based on state. Three sizes—Small (40px), Medium (44px), and Large (48px)—ensure flexibility across layouts.</p>
+            <div class="doc-prop-row">
+              <div class="doc-prop-tag"><strong>Props</strong> size · state · label · labelIcon · leftIcon · rightIcon · mandatory · caption</div>
+              <div class="doc-prop-tag"><strong>Sizes</strong> S · M · L</div>
+              <div class="doc-prop-tag"><strong>States</strong> 8 interaction states</div>
+              <div class="doc-prop-tag"><strong>Focus ring</strong> 4px brand blue</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anatomy -->
+        <div class="doc-card">
+          <div class="doc-card-head"><span class="doc-card-title">Anatomy</span></div>
+          <div class="doc-card-body">
+            <div class="anatomy-stage">
+              <div class="anatomy-wrapper" style="width:280px;">
+                <!-- Badge 1: Label text -->
+                <span class="a-badge" style="top:6px;left:-9px;">1</span>
+                <!-- Badge 2: Mandatory -->
+                <span class="a-badge" style="top:6px;left:40px;">2</span>
+                <!-- Badge 3: Label icon -->
+                <span class="a-badge" style="top:6px;right:-9px;">3</span>
+                <!-- Badge 4: Leading icon -->
+                <span class="a-badge" style="top:40px;left:4px;">4</span>
+                <!-- Badge 5: Input text -->
+                <span class="a-badge" style="top:40px;left:120px;">5</span>
+                <!-- Badge 6: Trailing icon -->
+                <span class="a-badge" style="top:40px;right:4px;">6</span>
+                <!-- Badge 7: Caption -->
+                <span class="a-badge" style="bottom:-2px;left:-9px;">7</span>
+
+                <!-- Label row -->
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;padding:3px 2px;outline:1.5px dashed rgba(0,108,182,0.3);outline-offset:3px;border-radius:3px;">
+                  <span style="font-family:Manrope,sans-serif;font-size:14px;font-weight:600;color:#0d121c;">Label</span>
+                  <span style="font-family:Manrope,sans-serif;font-size:14px;font-weight:600;color:#d92d2d;">*</span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg>
+                </div>
+                <!-- Input box (focused state for anatomy) -->
+                <div style="background:white;border:1px solid #006cb6;border-radius:8px;display:flex;align-items:center;gap:4px;padding:12px;height:44px;margin-bottom:4px;box-shadow:0 0 0 4px rgba(0,108,182,0.4);outline:1.5px dashed rgba(0,108,182,0.3);outline-offset:5px;width:280px;box-sizing:border-box;">
+                  <div style="display:flex;flex:1;align-items:center;gap:8px;min-width:0;">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                    <span style="flex:1;font-family:Manrope,sans-serif;font-size:14px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                  </div>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                </div>
+                <!-- Caption -->
+                <div style="display:flex;align-items:center;gap:4px;padding:3px 2px;outline:1.5px dashed rgba(0,108,182,0.3);outline-offset:3px;border-radius:3px;">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg>
+                  <span style="font-family:Manrope,sans-serif;font-size:14px;color:#9aa4b2;">Description</span>
+                </div>
+              </div>
+            </div>
+            <div class="anatomy-legend">
+              <div class="al-item"><span class="al-badge">1</span> Label text</div>
+              <div class="al-item"><span class="al-badge">2</span> Mandatory marker</div>
+              <div class="al-item"><span class="al-badge">3</span> Label info icon</div>
+              <div class="al-item"><span class="al-badge">4</span> Leading icon</div>
+              <div class="al-item"><span class="al-badge">5</span> Input / placeholder text</div>
+              <div class="al-item"><span class="al-badge">6</span> Trailing icon</div>
+              <div class="al-item"><span class="al-badge">7</span> Caption <span style="font-size:11px;color:var(--text-3);margin-left:2px;">(optional)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sizes -->
+        <div class="doc-card">
+          <div class="doc-card-head"><span class="doc-card-title">Sizes</span></div>
+          <div class="doc-card-body">
+            <div class="sizes-row">
+              <!-- Small -->
+              <div class="size-cell">
+                <div class="size-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:180px;font-family:Manrope,sans-serif;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <span style="font-size:14px;font-weight:600;color:#0d121c;">Label</span>
+                      <span style="font-size:14px;font-weight:600;color:#d92d2d;">*</span>
+                    </div>
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:14px;color:#9aa4b2;">Placeholder</span>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="size-meta">
+                  <div class="size-name">Small (S)</div>
+                  <div class="size-desc">Height 40px · Font 14px · py 10px</div>
+                </div>
+              </div>
+              <!-- Medium -->
+              <div class="size-cell">
+                <div class="size-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:180px;font-family:Manrope,sans-serif;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <span style="font-size:14px;font-weight:600;color:#0d121c;">Label</span>
+                      <span style="font-size:14px;font-weight:600;color:#d92d2d;">*</span>
+                    </div>
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:12px;height:44px;">
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:14px;color:#9aa4b2;">Placeholder</span>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="size-meta">
+                  <div class="size-name">Medium (M)</div>
+                  <div class="size-desc">Height 44px · Font 14px · p 12px</div>
+                </div>
+              </div>
+              <!-- Large -->
+              <div class="size-cell">
+                <div class="size-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:180px;font-family:Manrope,sans-serif;">
+                    <div style="display:flex;align-items:center;gap:4px;">
+                      <span style="font-size:14px;font-weight:600;color:#0d121c;">Label</span>
+                      <span style="font-size:14px;font-weight:600;color:#d92d2d;">*</span>
+                    </div>
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:12px;height:48px;">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="7" y1="7" x2="17" y2="17"/><line x1="17" y1="7" x2="7" y2="17"/></svg>
+                      <span style="flex:1;font-size:16px;color:#9aa4b2;">Placeholder</span>
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6,10 12,16 18,10"/></svg>
+                    </div>
+                  </div>
+                </div>
+                <div class="size-meta">
+                  <div class="size-name">Large (L)</div>
+                  <div class="size-desc">Height 48px · Font 16px · p 12px</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- States -->
+        <div class="doc-card">
+          <div class="doc-card-head"><span class="doc-card-title">States</span></div>
+          <div class="doc-card-body">
+            <div class="states-grid">
+
+              <!-- Empty -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg><span style="font-size:12px;color:#9aa4b2;">Description</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Empty</div><div class="state-desc">Default idle state, no input yet</div></div>
+              </div>
+
+              <!-- Filled -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#0d121c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Input text</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg><span style="font-size:12px;color:#9aa4b2;">Description</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Filled</div><div class="state-desc">User has entered text</div></div>
+              </div>
+
+              <!-- Hover -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #006cb6;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg><span style="font-size:12px;color:#9aa4b2;">Description</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Hover</div><div class="state-desc">Brand border on pointer-over</div></div>
+              </div>
+
+              <!-- Focused -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #006cb6;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;box-shadow:0 0 0 4px rgba(0,108,182,0.4);">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg><span style="font-size:12px;color:#9aa4b2;">Description</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Focused</div><div class="state-desc">4px brand ring on active input</div></div>
+              </div>
+
+              <!-- Success -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #079455;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#079455" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><polyline points="5,8 7,10.5 11,5.5"/></svg><span style="font-size:12px;color:#079455;">Success message</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Success</div><div class="state-desc">Validated, green border + caption</div></div>
+              </div>
+
+              <!-- Alert -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #dc6803;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#dc6803" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M8 2.5L14.5 13H1.5Z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.75" fill="#dc6803" stroke="none"/></svg><span style="font-size:12px;color:#f79009;">Alert message</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Alert</div><div class="state-desc">Warning — input needs attention</div></div>
+              </div>
+
+              <!-- Error -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;">
+                    <div style="background:white;border:1px solid #b91616;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#9aa4b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Placeholder</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#d92d2d" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5"/></svg><span style="font-size:12px;color:#d92d2d;">Error message</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Error</div><div class="state-desc">Invalid — must be corrected</div></div>
+              </div>
+
+              <!-- Read Only -->
+              <div class="state-cell">
+                <div class="state-preview">
+                  <div style="display:flex;flex-direction:column;gap:4px;width:150px;font-family:Manrope,sans-serif;opacity:0.5;">
+                    <div style="background:white;border:1px solid #e9eaeb;border-radius:8px;display:flex;align-items:center;gap:8px;padding:10px 12px;height:40px;">
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>
+                      <span style="flex:1;font-size:13px;color:#0d121c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Input text</span>
+                      <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="5,8 10,13 15,8"/></svg>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:4px;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" style="flex-shrink:0;"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg><span style="font-size:12px;color:#9aa4b2;">Description</span></div>
+                  </div>
+                </div>
+                <div class="state-meta"><div class="state-name">Read Only</div><div class="state-desc">Displays value, non-editable at 50% opacity</div></div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Usage Guidelines -->
+        <div class="doc-card">
+          <div class="doc-card-head"><span class="doc-card-title">Usage Guidelines</span></div>
+          <div class="doc-card-body">
+            <div class="usage-cols">
+              <div class="usage-col usage-do">
+                <div class="usage-col-head"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,6 4.5,9.5 11,2.5"/></svg> Do</div>
+                <div class="usage-items">
+                  <div class="usage-item"><div class="usage-dot"></div><span>Always provide a visible label above the field so users know what to enter before interacting.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Use the mandatory marker (*) for required fields and accompany it with a legend explaining the symbol.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Show the caption immediately after validation — success, alert, or error — so feedback is inline and contextual.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Choose a size consistent with the rest of the form. Mix sizes only when there is a clear hierarchy reason.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Use the read-only state for values the user needs to see but cannot change in that context.</span></div>
+                </div>
+              </div>
+              <div class="usage-col usage-dont">
+                <div class="usage-col-head"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg> Don't</div>
+                <div class="usage-items">
+                  <div class="usage-item"><div class="usage-dot"></div><span>Don't rely solely on placeholder text to convey the label — it disappears on input and is not a substitute for a label.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Don't trigger an error state before the user has had a chance to interact with the field (no pre-emptive errors).</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Don't use the alert state and error state interchangeably — alert is a soft warning, error requires correction before submission.</span></div>
+                  <div class="usage-item"><div class="usage-dot"></div><span>Don't disable a field without communicating why. Prefer read-only or a tooltip explaining the locked state.</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /doc-scroll -->
+
+      <!-- ── Code tab ── -->
+      <div class="card variants-card" id="codeContent" style="display:flex;">
+        <div class="variants-head"><div class="variants-title">Input Field Variants</div></div>
+
+        <!-- Filters: 4 cols × 2 rows -->
+        <div class="filter-row">
+          <!-- Row 1 -->
+          <div class="filter-group-item">
+            <span class="filter-label-text">Size</span>
+            <div class="filter-select-wrap">
+              <select class="filter-select" id="fSize" onchange="onFilter()">
+                <option value="s">S — Small</option>
+                <option value="m">M — Medium</option>
+                <option value="l">L — Large</option>
+              </select>
+              <svg class="select-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><polyline points="4,6 8,10 12,6"/></svg>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Left Icon?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fLeftIcon" checked onchange="onToggle(this,'leftIconYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="leftIconYN">Yes</span>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Right Icon?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fRightIcon" checked onchange="onToggle(this,'rightIconYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="rightIconYN">Yes</span>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Mandatory?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fMandatory" checked onchange="onToggle(this,'mandatoryYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="mandatoryYN">Yes</span>
+            </div>
+          </div>
+          <!-- Row 2 -->
+          <div class="filter-group-item">
+            <span class="filter-label-text">State</span>
+            <div class="filter-select-wrap">
+              <select class="filter-select" id="fState" onchange="onFilter()">
+                <option value="empty">Empty</option>
+                <option value="filled">Filled</option>
+                <option value="hover">Hover</option>
+                <option value="focused">Focused</option>
+                <option value="success">Success</option>
+                <option value="alert">Alert</option>
+                <option value="error">Error</option>
+                <option value="read-only">Read Only</option>
+              </select>
+              <svg class="select-chevron" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><polyline points="4,6 8,10 12,6"/></svg>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Label?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fLabel" checked onchange="onToggle(this,'labelYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="labelYN">Yes</span>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Label Icon?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fLabelIcon" checked onchange="onToggle(this,'labelIconYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="labelIconYN">Yes</span>
+            </div>
+          </div>
+          <div class="filter-group-item">
+            <span class="filter-label-text">Caption?</span>
+            <div class="toggle-wrap">
+              <label class="toggle-switch">
+                <input type="checkbox" id="fCaption" checked onchange="onToggle(this,'captionYN')">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+              <span class="toggle-yn" id="captionYN">Yes</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="variants-divider"></div>
+
+        <div class="ac-row">
+          <div class="ac-artboard">
+            <div class="ac-section-label">Preview</div>
+            <div class="ac-preview" id="acPreview"></div>
+            <div class="ac-tags" id="acTags"></div>
+          </div>
+          <div class="ac-code-col">
+            <div class="ac-tabs">
+              <button class="ac-tab" id="tabElf" onclick="switchTab('elf')">ELF Component</button>
+              <button class="ac-tab active" id="tabRaw" onclick="switchTab('raw')">Raw Flutter</button>
+            </div>
+            <div class="ac-code-wrap">
+              <button class="copy-btn" id="copyBtn" onclick="copyCode()">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/></svg>
+                Copy
+              </button>
+              <div class="code-table" id="codeTable"></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /variants-card -->
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Inline SVG constants ───────────────────────────────────────────────── */
+const IC_INFO  = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="7" x2="8" y2="11"/><circle cx="8" cy="5" r="0.75" fill="#9aa4b2" stroke="none"/></svg>`;
+const IC_LEAD_SM = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round"><line x1="10" y1="4" x2="10" y2="16"/><line x1="4" y1="10" x2="16" y2="10"/><line x1="5.76" y1="5.76" x2="14.24" y2="14.24"/><line x1="14.24" y1="5.76" x2="5.76" y2="14.24"/></svg>`;
+const IC_LEAD_LG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="7" y1="7" x2="17" y2="17"/><line x1="17" y1="7" x2="7" y2="17"/></svg>`;
+const IC_CHEV_SM = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,8 10,13 15,8"/></svg>`;
+const IC_CHEV_LG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9aa4b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,10 12,16 18,10"/></svg>`;
+const IC_SUCCESS = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#079455" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><polyline points="5,8 7,10.5 11,5.5"/></svg>`;
+const IC_ALERT   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#dc6803" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5L14.5 13H1.5Z"/><line x1="8" y1="6" x2="8" y2="9.5"/><circle cx="8" cy="11.5" r="0.75" fill="#dc6803" stroke="none"/></svg>`;
+const IC_ERROR   = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#d92d2d" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><line x1="5.5" y1="5.5" x2="10.5" y2="10.5"/><line x1="10.5" y1="5.5" x2="5.5" y2="10.5"/></svg>`;
+
+/* ── Render input field ─────────────────────────────────────────────────── */
+function renderInputField({ size, state, label, labelIcon, leftIcon, rightIcon, mandatory, caption }) {
+  const heights   = { s: 40, m: 44, l: 48 };
+  const paddings  = { s: '10px 12px', m: '12px', l: '12px' };
+  const fontSizes = { s: 14, m: 14, l: 16 };
+  const iconLead  = size === 'l' ? IC_LEAD_LG : IC_LEAD_SM;
+  const iconChev  = size === 'l' ? IC_CHEV_LG : IC_CHEV_SM;
+
+  const borderMap = {
+    'empty': '#e9eaeb', 'filled': '#e9eaeb', 'hover': '#006cb6',
+    'focused': '#006cb6', 'success': '#079455', 'alert': '#dc6803',
+    'error': '#b91616', 'read-only': '#e9eaeb'
+  };
+
+  const isFilled   = state === 'filled' || state === 'read-only';
+  const isFocused  = state === 'focused';
+  const isReadOnly = state === 'read-only';
+
+  const bColor  = borderMap[state];
+  const shadow  = isFocused ? 'box-shadow:0 0 0 4px rgba(0,108,182,0.4);' : '';
+  const opacity = isReadOnly ? 'opacity:0.5;' : '';
+  const textClr = isFilled ? '#0d121c' : '#9aa4b2';
+  const text    = isFilled ? 'Input text' : 'Placeholder';
+  const fs      = fontSizes[size];
+  const h       = heights[size];
+  const pad     = paddings[size];
+
+  // Caption config
+  let capIcon = IC_INFO, capColor = '#9aa4b2', capText = 'Description';
+  if (state === 'success') { capIcon = IC_SUCCESS; capColor = '#079455'; capText = 'Success message'; }
+  else if (state === 'alert')  { capIcon = IC_ALERT;   capColor = '#f79009'; capText = 'Alert message'; }
+  else if (state === 'error')  { capIcon = IC_ERROR;   capColor = '#d92d2d'; capText = 'Error message'; }
+
+  let html = '<div class="if-wrap">';
+
+  if (label) {
+    html += `<div class="if-label-row">
+      <span class="if-label-text">Label</span>
+      ${mandatory ? '<span class="if-mandatory"> *</span>' : ''}
+      ${labelIcon ? `<span style="display:flex;align-items:center;">${IC_INFO}</span>` : ''}
+    </div>`;
+  }
+
+  html += `<div class="if-container" style="border-color:${bColor};${shadow}${opacity}padding:${pad};height:${h}px;">
+    <div class="if-inner">
+      ${leftIcon ? `<span style="flex-shrink:0;display:flex;">${iconLead}</span>` : ''}
+      <span class="if-input-text" style="color:${textClr};font-size:${fs}px;">${text}</span>
+    </div>
+    ${rightIcon ? `<span style="flex-shrink:0;display:flex;">${iconChev}</span>` : ''}
+  </div>`;
+
+  if (caption) {
+    html += `<div class="if-caption-row">
+      <span style="flex-shrink:0;display:flex;">${capIcon}</span>
+      <span class="if-caption-text" style="color:${capColor};">${capText}</span>
+    </div>`;
+  }
+
+  html += '</div>';
+  return html;
+}
+
+/* ── Filters ─────────────────────────────────────────────────────────────── */
+function getFilters() {
+  return {
+    size:      document.getElementById('fSize').value,
+    state:     document.getElementById('fState').value,
+    leftIcon:  document.getElementById('fLeftIcon').checked,
+    rightIcon: document.getElementById('fRightIcon').checked,
+    mandatory: document.getElementById('fMandatory').checked,
+    label:     document.getElementById('fLabel').checked,
+    labelIcon: document.getElementById('fLabelIcon').checked,
+    caption:   document.getElementById('fCaption').checked,
+  };
+}
+
+function onToggle(cb, labelId) {
+  document.getElementById(labelId).textContent = cb.checked ? 'Yes' : 'No';
+  onFilter();
+}
+function onFilter() { renderArtboard(); renderCode(); }
+
+function renderArtboard() {
+  const f = getFilters();
+  document.getElementById('acPreview').innerHTML = renderInputField(f);
+
+  const stateLabel = f.state.charAt(0).toUpperCase() + f.state.slice(1).replace('-', ' ');
+  const sizeLabel  = { s: 'Small (S)', m: 'Medium (M)', l: 'Large (L)' }[f.size];
+  const flags = [
+    f.leftIcon  && 'Left icon',
+    f.rightIcon && 'Right icon',
+    f.mandatory && 'Mandatory',
+    f.label     && 'Label',
+    f.labelIcon && 'Label icon',
+    f.caption   && 'Caption',
+  ].filter(Boolean);
+
+  const tags = [
+    { text: sizeLabel, hi: true },
+    { text: stateLabel, hi: true },
+    ...flags.map(t => ({ text: t, hi: false })),
+  ];
+  document.getElementById('acTags').innerHTML = tags.map((t, i) =>
+    `${i > 0 ? '<span class="p-abtag-dot">·</span>' : ''}<span class="p-abtag${t.hi ? ' hi' : ''}">${t.text}</span>`
+  ).join('');
+}
+
+/* ── ELF Component code ──────────────────────────────────────────────────── */
+function elfCode(f) {
+  const sizeMap  = { s: 'ElfInputSize.s', m: 'ElfInputSize.m', l: 'ElfInputSize.l' };
+  const stateMap = {
+    empty: 'ElfInputState.empty', filled: 'ElfInputState.filled', hover: 'ElfInputState.hover',
+    focused: 'ElfInputState.focused', success: 'ElfInputState.success', alert: 'ElfInputState.alert',
+    error: 'ElfInputState.error', 'read-only': 'ElfInputState.readOnly'
+  };
+  const lines = [`ElfInputField(`];
+  lines.push(`  size: ${sizeMap[f.size]},`);
+  lines.push(`  state: ${stateMap[f.state]},`);
+  if (f.mandatory) lines.push(`  mandatory: true,`);
+  if (f.label)     lines.push(`  label: true,`);
+  if (f.labelIcon) lines.push(`  labelIcon: true,`);
+  if (f.leftIcon)  lines.push(`  leftIcon: true,`);
+  if (f.rightIcon) lines.push(`  rightIcon: true,`);
+  if (f.caption)   lines.push(`  caption: true,`);
+  lines.push(`)`);
+  return lines.join('\n');
+}
+
+/* ── Raw Flutter code ────────────────────────────────────────────────────── */
+function rawCode(f) {
+  const heights  = { s: 40, m: 44, l: 48 };
+  const pads     = { s: 'const EdgeInsets.symmetric(horizontal: 12, vertical: 10)', m: 'const EdgeInsets.all(12)', l: 'const EdgeInsets.all(12)' };
+  const fontSizes = { s: 14.0, m: 14.0, l: 16.0 };
+  const iconSizes = { s: 20.0, m: 20.0, l: 24.0 };
+
+  const borderColors = {
+    empty: '0xFFE9EAEB', filled: '0xFFE9EAEB', hover: '0xFF006CB6',
+    focused: '0xFF006CB6', success: '0xFF079455', alert: '0xFFDC6803',
+    error: '0xFFB91616', 'read-only': '0xFFE9EAEB'
+  };
+
+  const stateKey = f.state;
+  const isFilled   = stateKey === 'filled' || stateKey === 'read-only';
+  const isFocused  = stateKey === 'focused';
+  const isReadOnly = stateKey === 'read-only';
+  const borderClr  = borderColors[stateKey];
+  const h          = heights[f.size];
+  const pad        = pads[f.size];
+  const fs         = fontSizes[f.size];
+  const iconSz     = iconSizes[f.size];
+  const textClr    = isFilled ? '0xFF0D121C' : '0xFF9AA4B2';
+  const textVal    = isFilled ? "'Input text'" : "'Placeholder'";
+
+  let captionRow = '';
+  if (f.caption) {
+    let capClr = '0xFF9AA4B2', capTxt = "'Description'", capIcon = 'Icons.info_outline';
+    if (stateKey === 'success') { capClr = '0xFF079455'; capTxt = "'Success message'"; capIcon = 'Icons.check_circle_outline'; }
+    else if (stateKey === 'alert')  { capClr = '0xFFDC6803'; capTxt = "'Alert message'"; capIcon = 'Icons.warning_amber_outlined'; }
+    else if (stateKey === 'error')  { capClr = '0xFFD92D2D'; capTxt = "'Error message'"; capIcon = 'Icons.error_outline'; }
+    captionRow = `
+    const SizedBox(height: 4),
+    Row(
+      children: [
+        Icon(${capIcon}, size: 16, color: const Color(${capClr})),
+        const SizedBox(width: 4),
+        Text(
+          ${capTxt},
+          style: const TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 14,
+            color: Color(${capClr}),
+          ),
+        ),
+      ],
+    ),`;
+  }
+
+  let focusShadow = '';
+  if (isFocused) {
+    focusShadow = `
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x66006CB6),
+            blurRadius: 0,
+            spreadRadius: 4,
+          ),
+        ],`;
+  }
+
+  let labelRow = '';
+  if (f.label) {
+    const mandatory = f.mandatory ? `
+        const Text(
+          ' *',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFD92D2D),
+          ),
+        ),` : '';
+    const labelIcon = f.labelIcon ? `
+        const SizedBox(width: 4),
+        Icon(Icons.info_outline, size: 16, color: const Color(0xFF9AA4B2)),` : '';
+    labelRow = `
+    Row(
+      children: [
+        const Text(
+          'Label',
+          style: TextStyle(
+            fontFamily: 'Manrope',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF0D121C),
+          ),
+        ),${mandatory}${labelIcon}
+      ],
+    ),
+    const SizedBox(height: 4),`;
+  }
+
+  const leadIcon = f.leftIcon ? `
+          Icon(Icons.auto_awesome_outlined,
+            size: ${iconSz},
+            color: const Color(0xFF9AA4B2),
+          ),
+          const SizedBox(width: 8),` : '';
+
+  const trailIcon = f.rightIcon ? `
+          const SizedBox(width: 8),
+          Icon(Icons.keyboard_arrow_down,
+            size: ${iconSz},
+            color: const Color(0xFF9AA4B2),
+          ),` : '';
+
+  const opacityWrap  = isReadOnly ? 'Opacity(\n  opacity: 0.5,\n  child: ' : '';
+  const opacityClose = isReadOnly ? '\n),' : '';
+
+  return `// size=${f.size} · state=${stateKey}
+${opacityWrap}Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [${labelRow}
+    ${opacityWrap ? '' : ''}SizedBox(
+      height: ${h},
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(${borderClr})),
+          borderRadius: BorderRadius.circular(8),${focusShadow}
+        ),
+        child: Padding(
+          padding: ${pad},
+          child: Row(
+            children: [${leadIcon}
+              Expanded(
+                child: Text(
+                  ${textVal},
+                  style: const TextStyle(
+                    fontFamily: 'Manrope',
+                    fontSize: ${fs},
+                    color: Color(${textClr}),
+                  ),
+                ),
+              ),${trailIcon}
+            ],
+          ),
+        ),
+      ),
+    ),${captionRow}
+  ],
+)${opacityClose}`;
+}
+
+/* ── Syntax highlighting ─────────────────────────────────────────────────── */
+function hl(code) {
+  let h = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  h = h.replace(/(\/\/[^\n]*)/g, '<span class="cmt">$1</span>');
+  h = h.replace(/('(?:[^'\\]|\\.)*')/g, '<span class="str">$1</span>');
+  h = h.replace(/\b(0x[0-9A-Fa-f]+)\b/g, '<span class="num">$1</span>');
+  h = h.replace(/\b(\d+\.\d+|\d+)\b/g, '<span class="num">$1</span>');
+  h = h.replace(/\b(const|null|true|false|void|final|return|new|if|else)\b/g, '<span class="kw">$1</span>');
+  h = h.replace(/([a-z_][a-zA-Z0-9_]*)(\s*)(:)(?!:)/g, '<span class="prm">$1</span>$2$3');
+  h = h.replace(/\b([A-Z][a-zA-Z0-9_]*)\b/g, '<span class="cls">$1</span>');
+  return h;
+}
+
+function renderCode() {
+  const f = getFilters();
+  const code = activeTab === 'elf' ? elfCode(f) : rawCode(f);
+  const lines = hl(code).split('\n');
+  document.getElementById('codeTable').innerHTML = lines.map((line, i) =>
+    `<div class="code-line"><span class="ln">${i + 1}</span><span class="lc">${line || ' '}</span></div>`
+  ).join('');
+}
+
+let activeTab = 'raw';
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tabElf').classList.toggle('active', tab === 'elf');
+  document.getElementById('tabRaw').classList.toggle('active', tab === 'raw');
+  renderCode();
+}
+
+function copyCode() {
+  const f = getFilters();
+  const code = activeTab === 'elf' ? elfCode(f) : rawCode(f);
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('ok');
+    setTimeout(() => {
+      btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M3 11V3a2 2 0 0 1 2-2h8"/></svg> Copy`;
+      btn.classList.remove('ok');
+    }, 1800);
+  });
+}
+
+/* ── Main tab switching ──────────────────────────────────────────────────── */
+function switchMainTab(tab) {
+  document.getElementById('tabDoc').classList.toggle('active', tab === 'doc');
+  document.getElementById('tabCode').classList.toggle('active', tab === 'code');
+  document.getElementById('tabStatus').classList.toggle('active', tab === 'status');
+  document.getElementById('docContent').classList.toggle('visible', tab === 'doc');
+  document.getElementById('codeContent').style.display = tab === 'code' ? 'flex' : 'none';
+  document.getElementById('statusContent').classList.toggle('visible', tab === 'status');
+}
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
+const COMPONENTS = [
+  { name: 'Overview',     desc: 'Design system overview and foundations',      href: 'components.html',        status: 'live' },
+  { name: 'Alerts',       desc: 'Contextual feedback banners',                 href: 'alerts.html',       status: 'live' },
+  { name: 'Button',       desc: 'Actions, triggers, and calls-to-action',      href: 'button.html',       status: 'live' },
+  { name: 'Breadcrumbs',  desc: 'Hierarchical navigation trail',               href: 'breadcrumbs.html',  status: 'live' },
+  { name: 'Checkbox',     desc: 'Multi-select and toggle-based form control',  href: 'checkbox.html',     status: 'live' },
+  { name: 'Chips',        desc: 'Compact selection and filter tags',           href: 'chips.html',        status: 'live' },
+  { name: 'Icons',        desc: 'Icon library and usage guidelines',           href: 'icons.html',        status: 'live' },
+  { name: 'Input Fields', desc: 'Text inputs, fields, and form elements',      href: 'input-field.html',  status: 'live' },
+  { name: 'Progress Bar', desc: 'Linear progress and loading indicators',      href: 'progress-bar.html', status: 'live' },
+];
+
+function openSearch() {
+  document.getElementById('searchOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('searchInput').focus(), 80);
+  filterSearch('');
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('open');
+  document.getElementById('searchInput').value = '';
+}
+function filterSearch(q) {
+  const items = q
+    ? COMPONENTS.filter(c => c.name.toLowerCase().includes(q.toLowerCase()) || c.desc.toLowerCase().includes(q.toLowerCase()))
+    : COMPONENTS;
+  document.getElementById('searchResults').innerHTML = items.length === 0
+    ? `<div class="search-empty">No results for "${q}"</div>`
+    : `<div class="search-section-label">Components</div>` + items.map(c => `
+        <a class="search-item" href="${c.href}">
+          <div class="search-item-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#006cb6" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="6" height="6" rx="1.5"/><rect x="10" y="2" width="6" height="6" rx="1.5"/><rect x="2" y="10" width="6" height="6" rx="1.5"/><rect x="10" y="10" width="6" height="6" rx="1.5"/></svg></div>
+          <div class="search-item-body"><div class="search-item-name">${c.name}</div><div class="search-item-desc">${c.desc}</div></div>
+          <span class="search-item-badge badge-${c.status}">${c.status === 'live' ? 'Live' : 'Soon'}</span>
+        </a>`).join('');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); openSearch(); }
+  if (e.key === 'Escape') closeSearch();
+});
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+renderArtboard();
+renderCode();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  (function() {
+    var anim = lottie.loadAnimation({ container: document.getElementById('lottie-anim'), renderer: 'svg', loop: true, autoplay: true, path: 'loader.json' });
+    var t0 = Date.now();
+    window.addEventListener('load', function() {
+      var delay = Math.max(0, 600 - (Date.now() - t0));
+      setTimeout(function() {
+        var el = document.getElementById('page-loader');
+        el.classList.add('loaded');
+        el.addEventListener('transitionend', function() { el.remove(); anim.destroy(); }, { once: true });
+      }, delay);
+    });
+  })();
+</script>
+</body>
+</html>

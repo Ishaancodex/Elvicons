@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home — ELF Design System 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="fav-icon.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @view-transition { navigation: auto; }
+    @keyframes fade-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+    ::view-transition-old(root) { animation: 180ms ease-in  fade-out; }
+    ::view-transition-new(root) { animation: 220ms ease-out fade-in; }
+    body { animation: fade-in 220ms ease-out backwards; }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Manrope', sans-serif;
+      color: #0d121c;
+      background: white;
+      min-width: 1440px;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    /* ══════════════════════════════════════════
+       NAVBAR — Pill shape, centered, fixed
+       135:4612 — w:1008, h:84, radius:400, y:40
+    ══════════════════════════════════════════ */
+    .navbar {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1008px;
+      height: 84px;
+      display: flex;
+      align-items: center;
+      padding: 20px 24px;
+      gap: 32px;
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 400px;
+      box-shadow: 0px 12px 40px rgba(0,108,182,0.12);
+      z-index: 200;
+    }
+    /* Left: logo area — flex:1 */
+    .nav-brand {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-brand-icon {
+      width: 40px;
+      height: 40px;
+      background: #006cb6;
+      border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden;
+    }
+    .nav-brand-icon img { width: 24px; height: 24px; display: block; }
+    .nav-brand-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .nav-brand-name .elf { color: #006cb6; }
+    /* Right: nav links — flex:1, centered */
+    .nav-links {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: #364152;
+      padding: 12px 24px;
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      white-space: nowrap;
+      transition: color 0.12s;
+    }
+    .nav-links a:hover { color: #0d121c; }
+    .nav-links a.active { color: #006cb6; }
+
+    /* ══════════════════════════════════════════
+       PAGE WRAPPER — contains all backgrounds + sections
+    ══════════════════════════════════════════ */
+    .page {
+      position: relative;
+      width: 100%;
+      overflow-x: clip;
+    }
+
+    /* ══ Background layer helpers ══ */
+    .bg-layer {
+      position: absolute;
+      left: 0; right: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-layer img.cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .clouds-img {
+      position: absolute;
+      left: -28.47%;
+      top: -90.26%;
+      width: 166.11%;
+      height: 174.85%;
+      max-width: none;
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════
+       CONTENT CONTAINER
+    ══════════════════════════════════════════ */
+    .inner {
+      width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* ══════════════════════════════════════════
+       HERO SECTION — height:1112px (Figma y=0..1112)
+       Mountain bg at y=0, h=720
+       Hero text at y=752, w=640, h=240
+    ══════════════════════════════════════════ */
+    .s-hero {
+      height: 1112px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-content {
+      position: absolute;
+      top: 752px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 640px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 42px;
+    }
+    .hero-texts {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .hero-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 56px;
+      line-height: 72px;
+      color: #0d121c;
+    }
+    .hero-title .elf { color: #006cb6; }
+    .hero-desc {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.5px;
+    }
+    .hero-btns {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* ══ Buttons ══ */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #006cb6;
+      color: white;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 16px;
+      border-radius: 8px;
+      box-shadow: 0px 4px 12px rgba(0,108,182,0.2);
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { background: #025085; transform: translateY(-1px); }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      color: #006cb6;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 9px 16px;
+      border-radius: 8px;
+      box-shadow: 0px 4px 12px rgba(0,108,182,0.2);
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      white-space: nowrap;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-ghost:hover { background: #deefff; transform: translateY(-1px); }
+
+    /* Figma logo icon container (18×18) */
+    .figma-icon {
+      position: relative;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      overflow: visible;
+      display: block;
+    }
+    .figma-icon img {
+      position: absolute;
+      max-width: none;
+    }
+
+    /* ══════════════════════════════════════════
+       SECTION HEADINGS — Instrument Serif Regular 32px
+    ══════════════════════════════════════════ */
+    .sec-heading {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      margin-bottom: 32px;
+    }
+    .sec-heading .elf { color: #006cb6; }
+
+    /* ══════════════════════════════════════════
+       BENEFITS SECTION — height:552px (Figma y=1112..1664)
+       Heading: 40px | gap: 32px | Grid: 360px | Bottom: 120px
+    ══════════════════════════════════════════ */
+    .s-benefits {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      padding-top: 40px;
+      padding-bottom: 120px;
+    }
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 32px;
+    }
+    .benefit-card {
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid #e9eaeb;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: 164px;
+      overflow: hidden;
+    }
+    .benefit-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 20px;
+      line-height: 24px;
+      color: #006cb6;
+      flex-shrink: 0;
+    }
+    .benefit-desc {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.5px;
+      overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════
+       COMPONENTS SECTION — height:1032px (Figma y=1664..2696)
+       Heading: 40px | gap: 32px | Grid: 840px | Bottom: 120px
+    ══════════════════════════════════════════ */
+    .s-components {
+      position: relative;
+      z-index: 1;
+      background: white;
+      padding-top: 40px;
+      padding-bottom: 120px;
+    }
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+    .comp-card {
+      background: white;
+      border: 1px solid #e9eaeb;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 408px;
+      transition: box-shadow 0.2s, transform 0.15s;
+      cursor: pointer;
+    }
+    .comp-card:hover {
+      box-shadow: 0px 12px 40px rgba(0,108,182,0.12);
+      transform: translateY(-2px);
+    }
+    .comp-preview {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: radial-gradient(circle, rgba(0,108,182,0.14) 1.5px, transparent 1.5px);
+      background-size: 22px 22px;
+      background-color: #f8fbff;
+      border-bottom: 1px solid #e9eaeb;
+      overflow: hidden;
+    }
+    .comp-info {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 116px;
+      flex-shrink: 0;
+    }
+    .comp-name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 20px;
+      line-height: 24px;
+      color: #006cb6;
+    }
+    .comp-desc {
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+    }
+
+    /* ── Mini Preview Widgets ── */
+    .preview-widget { background: white; border-radius: 8px; box-shadow: 0px 8px 28px rgba(0,108,182,0.12); border: 0.7px solid #e9eaeb; }
+    .pw-alert { width: 210px; padding: 10px; display: flex; flex-direction: column; gap: 7px; font-family: 'Manrope', sans-serif; }
+    .pw-alert-hdr { display: flex; align-items: center; gap: 5px; }
+    .pw-alert-icon { width: 13px; height: 13px; border-radius: 50%; background: #006cb6; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .pw-alert-icon svg { width: 8px; height: 8px; fill: white; }
+    .pw-alert-title { font-size: 9.5px; font-weight: 600; color: #0d121c; flex: 1; }
+    .pw-alert-time  { font-size: 7.5px; color: #0d121c; }
+    .pw-alert-close { font-size: 9px; color: #9aa4b2; }
+    .pw-alert-body  { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+    .pw-alert-text  { font-size: 8.5px; color: #0d121c; }
+    .pw-prog-wrap   { display: flex; align-items: center; gap: 4px; }
+    .pw-prog-track  { flex: 1; height: 4px; background: #f5f5f5; border-radius: 2px; overflow: hidden; }
+    .pw-prog-fill   { height: 100%; background: #006cb6; border-radius: 2px; }
+    .pw-prog-pct    { font-size: 6.5px; color: #0d121c; }
+    .pw-alert-btns  { display: flex; gap: 6px; }
+    .pw-ghost-btn   { font-size: 8px; font-weight: 600; color: #006cb6; padding: 4px 8px; border-radius: 4px; background: white; }
+    .pw-btn { background: #006cb6; color: white; font-family: 'Manrope', sans-serif; font-size: 15px; font-weight: 500; padding: 11px 28px; border-radius: 8px; letter-spacing: 0.15px; box-shadow: 0px 12px 40px rgba(0,108,182,0.25); }
+    .pw-input { padding: 14px 16px; display: flex; flex-direction: column; gap: 5px; width: 190px; font-family: 'Manrope', sans-serif; }
+    .pw-lbl-row     { display: flex; align-items: center; gap: 3px; margin-bottom: 1px; }
+    .pw-lbl         { font-size: 8.5px; font-weight: 600; color: #0d121c; }
+    .pw-lbl-req     { font-size: 8.5px; font-weight: 600; color: #d92d2d; }
+    .pw-lbl-info    { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #9aa4b2; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #9aa4b2; font-weight: 700; margin-left: 2px; }
+    .pw-input-box   { display: flex; align-items: center; gap: 5px; border: 0.8px solid #e9eaeb; border-radius: 5px; padding: 7px 9px; background: white; }
+    .pw-input-lead  { font-size: 10px; color: #9aa4b2; }
+    .pw-placeholder { font-size: 8.5px; color: #9aa4b2; flex: 1; }
+    .pw-input-trail { font-size: 8.5px; color: #9aa4b2; }
+    .pw-caption-row { display: flex; align-items: center; gap: 3px; margin-top: 1px; }
+    .pw-caption-info{ width: 10px; height: 10px; border-radius: 50%; border: 1px solid #9aa4b2; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #9aa4b2; font-weight: 700; }
+    .pw-caption     { font-size: 7.5px; color: #9aa4b2; }
+    .pw-cbs { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; font-family: 'Manrope', sans-serif; }
+    .pw-cb-row { display: flex; align-items: center; gap: 10px; }
+    .pw-cb { width: 15px; height: 15px; border-radius: 3.5px; border: 1.5px solid #364152; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .pw-cb.checked { background: #006cb6; border-color: #006cb6; }
+    .pw-cb svg { width: 10px; height: 10px; }
+    .pw-cb-label { font-size: 9px; font-weight: 500; color: #0d121c; }
+    .pw-chips { padding: 14px; display: flex; flex-direction: column; gap: 8px; font-family: 'Manrope', sans-serif; min-width: 120px; }
+    .pw-chip { display: flex; align-items: center; gap: 7px; padding: 5px 8px; border: 1px solid #e9eaeb; border-radius: 7px; }
+    .pw-chip.sel { background: #deefff; box-shadow: 0px 1px 3px rgba(33,33,33,0.1); }
+    .pw-chip-av { width: 22px; height: 22px; background: #deefff; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 7.5px; font-weight: 600; color: #006cb6; flex-shrink: 0; }
+    .pw-chip-lbl { font-size: 8.5px; color: #0d121c; }
+
+    /* ══════════════════════════════════════════
+       CONTRIBUTE SECTION — height:512px (Figma y=2696..3208)
+       Heading: 40px | gap: 32px | Card: 320px | Bottom: 120px
+    ══════════════════════════════════════════ */
+    .s-contribute {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      padding-top: 40px;
+      padding-bottom: 120px;
+    }
+    /* The dotted grid card: 1300×320px, exact Figma dimensions */
+    .contribute-card {
+      position: relative;
+      width: 1300px;
+      height: 320px;
+      border-radius: 12px;
+      border: 1px solid #e9eaeb;
+      background-color: rgba(255,255,255,0.92);
+      background-image: radial-gradient(circle, rgba(0,108,182,0.10) 1.5px, transparent 1.5px);
+      background-size: 24px 24px;
+      overflow: hidden;
+    }
+    /* Central content block: x=408, y=53, w=484 */
+    .contribute-content {
+      position: absolute;
+      left: 408px;
+      top: 53px;
+      width: 484px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      text-align: center;
+      z-index: 2;
+    }
+    .contribute-texts {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .contribute-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 24px;
+      line-height: 32px;
+      color: #0d121c;
+    }
+    .contribute-sub {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+      width: 430px;
+    }
+    .btn-start {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #006cb6;
+      color: white;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 11px 24px;
+      border-radius: 8px;
+      box-shadow: 0px 4px 12px rgba(0,108,182,0.2);
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-start:hover { background: #025085; transform: translateY(-1px); }
+
+    /* ── Cursor chip indicators ── */
+    .cursor-chip {
+      position: absolute;
+      z-index: 4;
+    }
+    .chip-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 24px;
+      color: white;
+      white-space: nowrap;
+    }
+    .chip-blue { background: #006cb6; }
+    .chip-green { background: #15b36a; }
+
+    /* ── Sticker helper ── */
+    .sticker {
+      position: absolute;
+      z-index: 3;
+    }
+    .sticker-bg {
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* ══════════════════════════════════════════
+       FOOTER — height:176px (Figma y=3208..3384)
+       Wave: 16px | Content (top=64): logo + tagline | nav
+    ══════════════════════════════════════════ */
+    .site-footer {
+      position: relative;
+      z-index: 1;
+      background: white;
+      height: 176px;
+    }
+    .footer-wave {
+      height: 16px;
+      overflow: hidden;
+    }
+    .footer-wave img { width: 100%; height: 16px; object-fit: cover; display: block; }
+    .footer-inner {
+      width: 1300px;
+      margin: 0 auto;
+      padding-top: 48px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .footer-brand { display: flex; flex-direction: column; gap: 12px; }
+    .footer-logo { display: flex; align-items: center; gap: 12px; }
+    .footer-logo-icon {
+      width: 36px; height: 36px;
+      background: #006cb6; border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden; flex-shrink: 0;
+    }
+    .footer-logo-icon img { width: 24px; height: 24px; display: block; }
+    .footer-logo-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .footer-logo-name .elf { color: #006cb6; }
+    .footer-tagline {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+    }
+    .footer-nav { display: flex; align-items: center; padding-top: 6px; }
+    .footer-nav a {
+      padding: 12px 24px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.15px;
+      transition: color 0.12s;
+    }
+    .footer-nav a:hover { color: #006cb6; }
+    .footer-nav a.active { color: #006cb6; }
+    /* ── Page Loader ─── */
+    #page-loader { position: fixed; inset: 0; z-index: 9999; background: white; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+    #page-loader.loaded { opacity: 0; pointer-events: none; }
+    #lottie-anim { width: 200px; height: 200px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="page-loader"><div id="lottie-anim"></div></div>
+
+<!-- ════════════════════════════════════════════
+     NAVBAR — Fixed pill, 1008×84px, centered
+     Figma: 135:4612, radius:400px, frosted glass
+════════════════════════════════════════════ -->
+<nav class="navbar">
+  <a class="nav-brand" href="home.html">
+    <div class="nav-brand-icon">
+      <img src="home-assets/elvicons-logo.png" alt="" />
+    </div>
+    <span class="nav-brand-name"><span class="elf">Elf</span> Design System.</span>
+  </a>
+  <div class="nav-links">
+    <a href="home.html" class="active">Home</a>
+    <a href="components.html">Components</a>
+    <a href="about.html">About Us</a>
+    <a href="feedback.html">Feedback</a>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE WRAPPER — relative container for bg images
+════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── BACKGROUND: Mountain (y=0, h=720) — Figma 136:4734 ── -->
+  <div class="bg-layer" style="top:0; height:720px;">
+    <img class="cover" src="home-assets/hero-image.webp" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Clouds 1 (y=720, h=1003) — Figma 145:993 ── -->
+  <div class="bg-layer" style="top:720px; height:1003px;z-index: 0;">
+    <img class="clouds-img" src="home-assets/clouds.png" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Clouds 2 (y=2300, h=1003) — Figma 157:4060 ── -->
+  <div class="bg-layer" style="top:3000px; height:1003px;">
+    <img class="clouds-img" src="home-assets/clouds.png" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Wavy separator (y=1496, h=95) — Figma 145:996 ── -->
+  <div class="bg-layer" style="top:1250px; height:95px; z-index:1;">
+    <img class="cover" src="home-assets/seperator.svg" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Wavy separator (y=1496, h=95) — Figma 145:996 ── -->
+  <div class="bg-layer" style="top:3140px; height:95px; z-index:1;">
+    <img class="cover" src="home-assets/seperator.svg" alt="" />
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       HERO SECTION — h=1112px
+       Mountain bg is absolutely positioned behind
+       Hero text at y=752, centered w=640
+  ════════════════════════════════════════════ -->
+  <section class="s-hero">
+    <div class="hero-content">
+      <div class="hero-texts">
+        <h1 class="hero-title"><span class="elf">Elf</span> Design System</h1>
+        <p class="hero-desc">The Elf design system defines the foundations of user interfaces across ANACIT's ecosystem of products &amp; services. It brings all experiences together under a single, unified framework.</p>
+      </div>
+      <div class="hero-btns">
+        <a href="components.html" class="btn-primary">Explore Components</a>
+        <a href="https://www.figma.com/design/okc3RghqKQAykSoFoYsRJ4/ELF-Design-System-2.0?node-id=200-7248&t=ldXFcXhgs0UIuPas-11" target="_blank" class="btn-ghost">
+          <!-- Figma logo — 5-part SVG from Figma 18×18 node 143:961 -->
+          <svg class="figma-icon" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 0h3v6H6C4.343 6 3 4.657 3 3s1.343-3 3-3z" fill="#F24E1E"/>
+            <path d="M9 0h3c1.657 0 3 1.343 3 3s-1.343 3-3 3H9V0z" fill="#FF7262"/>
+            <path d="M3 9c0-1.657 1.343-3 3-3h3v6H6C4.343 12 3 10.657 3 9z" fill="#A259FF"/>
+            <path d="M9 6h3c1.657 0 3 1.343 3 3s-1.343 3-3 3H9V6z" fill="#1ABCFE"/>
+            <path d="M3 15c0-1.657 1.343-3 3-3h3v3c0 1.657-1.343 3-3 3s-3-1.343-3-3z" fill="#0ACF83"/>
+          </svg>
+          Figma Library
+        </a>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       BENEFITS SECTION — h=552px (Figma y=1112..1664)
+       Transparent so clouds 1 show through frosted glass cards
+  ════════════════════════════════════════════ -->
+  <section class="s-benefits">
+    <div class="inner">
+      <!-- Heading: Figma 143:970 -->
+      <h2 class="sec-heading">Benefits of using the <span class="elf">Elf Design System.</span></h2>
+
+      <!-- 5 cards in 3-col grid (row 1: 3 cards, row 2: 2 cards + empty) -->
+      <div class="benefits-grid">
+        <!-- Figma 145:971 -->
+        <div class="benefit-card">
+          <p class="benefit-title">Scalability across apps</p>
+          <p class="benefit-desc">The design system makes it simpler to scale. Centralized, reusable, and dependable components align designers and developers, ensuring consistency and quality.</p>
+        </div>
+        <!-- Figma 145:977 -->
+        <div class="benefit-card">
+          <p class="benefit-title">Efficiency in building and maintaining apps</p>
+          <p class="benefit-desc">Designers save time using prebuilt elements, while developers build more efficiently with reusable code. This makes fixing or updating apps post-launch quicker and easier.</p>
+        </div>
+        <!-- Figma 145:974 -->
+        <div class="benefit-card">
+          <p class="benefit-title">Consistency of brand and design</p>
+          <p class="benefit-desc">Consistency is key to great user experiences. Our design system standardizes patterns and components, ensuring a unified experience across platforms and devices.</p>
+        </div>
+        <!-- Figma 145:982 -->
+        <div class="benefit-card">
+          <p class="benefit-title">Preservation of design decisions</p>
+          <p class="benefit-desc">When knowledge isn't documented, teams risk losing it during staff changes. Our design system stores all design decisions in a centralized, accessible place.</p>
+        </div>
+        <!-- Figma 145:985 -->
+        <div class="benefit-card">
+          <p class="benefit-title">Effective knowledge sharing</p>
+          <p class="benefit-desc">With clear documentation, teams can onboard quickly, collaborate better, and align on guidelines easily. Our design system acts as a central resource for all design decisions.</p>
+        </div>
+        <!-- Empty slot: keeps col-3 of row 2 empty -->
+        <div></div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       COMPONENTS SECTION — h=1032px (Figma y=1664..2696)
+       White background, 6 component cards in 3×2 grid
+  ════════════════════════════════════════════ -->
+  <section class="s-components">
+    <div class="inner">
+      <!-- Heading: Figma 145:1029 -->
+      <h2 class="sec-heading">Explore Component libraries</h2>
+
+      <div class="comp-grid">
+
+        <!-- ① Alerts — Figma 145:1031 -->
+        <a class="comp-card" href="alerts.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-alert">
+                <div class="pw-alert-hdr">
+                  <div class="pw-alert-icon">
+                    <svg viewBox="0 0 8 8"><path d="M4 0.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm0 1.3a.45.45 0 110 .9.45.45 0 010-.9zm-.6 1.5h1.2v2.4H3.4V3.3z"/></svg>
+                  </div>
+                  <span class="pw-alert-title">Title</span>
+                  <span class="pw-alert-time">12:39 PM</span>
+                  <span class="pw-alert-close">✕</span>
+                </div>
+                <div class="pw-alert-body">
+                  <span class="pw-alert-text">Add body content here</span>
+                  <div class="pw-prog-wrap">
+                    <div class="pw-prog-track"><div class="pw-prog-fill" style="width:10%"></div></div>
+                    <span class="pw-prog-pct">10%</span>
+                  </div>
+                  <div class="pw-alert-btns">
+                    <span class="pw-ghost-btn">Get Started</span>
+                    <span class="pw-ghost-btn">Dismiss</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Alerts</p>
+            <p class="comp-desc">Alerts show urgent messages needing attention; toasts show brief, less intrusive info like success or error.</p>
+          </div>
+        </a>
+
+        <!-- ② Button — Figma 145:1242 -->
+        <a class="comp-card" href="button.html">
+          <div class="comp-preview">
+            <div class="pw-btn">Get Started</div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Button</p>
+            <p class="comp-desc">Trigger actions or events, such as submitting forms, opening dialogs, or navigating to other pages.</p>
+          </div>
+        </a>
+
+        <!-- ③ Input Fields — Figma 145:2102 -->
+        <a class="comp-card" href="input-field.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-input">
+                <div class="pw-lbl-row">
+                  <span class="pw-lbl">Label</span>
+                  <span class="pw-lbl-req">*</span>
+                  <span class="pw-lbl-info">i</span>
+                </div>
+                <div class="pw-input-box">
+                  <span class="pw-input-lead">✱</span>
+                  <span class="pw-placeholder">Placeholder</span>
+                  <span class="pw-input-trail">✕</span>
+                </div>
+                <div class="pw-caption-row">
+                  <span class="pw-caption-info">i</span>
+                  <span class="pw-caption">Description</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Input Fields</p>
+            <p class="comp-desc">Input Fields are used for short, single-line inputs such as names, emails, and passwords.</p>
+          </div>
+        </a>
+
+        <!-- ④ Checkbox — Figma 157:3361 -->
+        <a class="comp-card" href="checkbox.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-cbs">
+                <div class="pw-cb-row">
+                  <div class="pw-cb checked">
+                    <svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                  <span class="pw-cb-label">Option 1</span>
+                </div>
+                <div class="pw-cb-row">
+                  <div class="pw-cb"></div>
+                  <span class="pw-cb-label">Option 2</span>
+                </div>
+                <div class="pw-cb-row">
+                  <div class="pw-cb"></div>
+                  <span class="pw-cb-label">Option 3</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Checkbox</p>
+            <p class="comp-desc">Checkboxes let users select one or more options from a list, perfect for multi-selection and toggles.</p>
+          </div>
+        </a>
+
+        <!-- ⑤ Chips — Figma 157:3581 -->
+        <a class="comp-card" href="chips.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-chips">
+                <div class="pw-chip sel">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+                <div class="pw-chip sel">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+                <div class="pw-chip sel">
+                  <div class="pw-chip-av">IS</div>
+                  <span class="pw-chip-lbl">Label</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Chips</p>
+            <p class="comp-desc">Chips are small UI elements representing tags, categories, or selections. They help users quickly filter or manage items.</p>
+          </div>
+        </a>
+
+        <!-- ⑥ Input Fields (variant) — Figma 157:3795 -->
+        <a class="comp-card" href="input-field.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div class="pw-input">
+                <div class="pw-lbl-row">
+                  <span class="pw-lbl">Email</span>
+                  <span class="pw-lbl-req">*</span>
+                </div>
+                <div class="pw-input-box">
+                  <span class="pw-placeholder">user@example.com</span>
+                </div>
+                <div class="pw-lbl-row" style="margin-top:6px;">
+                  <span class="pw-lbl">Password</span>
+                </div>
+                <div class="pw-input-box">
+                  <span class="pw-placeholder">••••••••</span>
+                  <span class="pw-input-trail" style="font-size:10px;">👁</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Input Fields</p>
+            <p class="comp-desc">Input Fields are used for short, single-line inputs such as names, emails, and passwords.</p>
+          </div>
+        </a>
+
+        <!-- Progress Bar -->
+        <a class="comp-card" href="progress-bar.html">
+          <div class="comp-preview">
+            <div class="preview-widget">
+              <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px;width:210px;font-family:'Manrope',sans-serif;box-sizing:border-box;">
+                <div class="pw-prog-wrap">
+                  <div class="pw-prog-track"><div class="pw-prog-fill" style="width:25%"></div></div>
+                  <span class="pw-prog-pct">25%</span>
+                </div>
+                <div class="pw-prog-wrap">
+                  <div class="pw-prog-track"><div class="pw-prog-fill" style="width:60%"></div></div>
+                  <span class="pw-prog-pct">60%</span>
+                </div>
+                <div class="pw-prog-wrap">
+                  <div class="pw-prog-track"><div class="pw-prog-fill" style="width:100%"></div></div>
+                  <span class="pw-prog-pct">100%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="comp-info">
+            <p class="comp-name">Progress Bar</p>
+            <p class="comp-desc">The Progress Bar shows task or process completion. It is a linear indicator used for uploads, form completion, or tracking.</p>
+          </div>
+        </a>
+
+      </div><!-- .comp-grid -->
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       CONTRIBUTE SECTION — h=512px (Figma y=2696..3208)
+       Transparent: clouds 2 visible behind card
+  ════════════════════════════════════════════ -->
+  <section class="s-contribute">
+
+    <div class="inner">
+      <!-- Heading: Figma 157:3324 -->
+      <h2 class="sec-heading"">Wondering how to contribute</h2>
+      <img 
+      src="home-assets/Vector 2.svg" 
+      alt=""
+      style="position:absolute; left:280px; top: 75px;"
+      >
+
+      <!-- Contribute card: 1300×320px, dotted grid bg — Figma 157:2664 -->
+      <div class="contribute-card">
+
+        <!-- Central content block — Figma 157:5527: x=408, y=53, w=484 -->
+        <div class="contribute-content">
+          <div class="contribute-texts">
+            <!-- Main italic text — Figma 157:5508: 24px Instrument Serif Italic -->
+            <p class="contribute-title">We welcome all feedback, designs, or ideas in order to produce the best possible experience for our users.</p>
+            <!-- Sub text — Figma 157:5522: 14px Manrope Regular -->
+            <p class="contribute-sub">If you're interested in contributing, check out our contributing guidelines to get started.</p>
+          </div>
+          <!-- Button — Figma 157:5510 -->
+          <a href="feedback.html" class="btn-start">Start Contributing</a>
+        </div>
+
+        <!-- Hand image — Figma 165:7243: x=626, y=208, w=49, h=139 -->
+        <img
+          src="home-assets/hand.png"
+          /* src="https://www.figma.com/api/mcp/asset/fbf92220-bd29-4f92-9f00-0834075d8aac" */
+          alt=""
+          style="position:absolute; left:620px; top:200px; width:49px; height:139px; z-index:2; pointer-events:none;scale: 0.75;"
+        />
+
+        <!-- ── Cursor chips — with triangular cursor pointers ── -->
+
+        <!-- Aditya chip — Figma 157:5532: x=307, y=34, w=73, h=32 (blue) -->
+        <img 
+          src="home-assets/aditya.png" 
+          alt=""
+          style="position:absolute; left:150px; top:-32px; scale: 0.25;"
+        />
+
+        <!-- Ishaan chip — Figma 157:5531: x=911, y=146, w=75, h=32 (green) -->
+        <img 
+          src="home-assets/ishaan.png" 
+          alt=""
+          style="position:absolute; left:750px; top:80px; scale: 0.25;"
+        />
+
+        <!-- ── Stickers — SVG recreations matching Figma screenshots ── -->
+
+        <!-- Heart sticker — Figma 157:5542: x=119.66, y=73.76, w=66.67, h=66.67 -->
+        <img 
+          src="home-assets/Heart.png" 
+          alt=""
+          style="position:absolute; left:120; top: 73; scale: 0.25;"
+        />
+
+        <!-- Eyes sticker — Figma 157:5547: x=369.20, y=228.11, w=60.90, h=60.90 -->
+        <img 
+          src="home-assets/👀.png" 
+          alt=""
+          style="position:absolute; left:150px; top: 150px; scale: 0.25;"
+        />
+
+        <!-- Star sticker — Figma 157:5544: x=1013, y=16, w=60, h=60 -->
+        <img 
+          src="home-assets/Star.png" 
+          alt=""
+          style="position:absolute; left:1013px; top: -48px; scale: 0.25;"
+        />
+
+        <!-- Thumbs up sticker — Figma 157:5543: x=1177, y=169.07, w=70.84, h=70.84 -->
+        <img 
+          src="home-assets/Thumbs up.png" 
+          alt=""
+          style="position:absolute; left:1020px; top: 100px; scale: 0.25;"
+        />
+
+        <!-- +1 sticker — Figma 157:5545: x=48, y=224, w=60, h=60 -->
+        <img 
+          src="home-assets/+1.png" 
+          alt=""
+          style="position:absolute; left:-50px; top: 120px; scale: 0.25;"
+        />
+
+      </div><!-- .contribute-card -->
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       FOOTER — h=176px (Figma 157:5578)
+       Wave line (16px) + inner content (top:64px)
+  ════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <!-- Footer wave — Figma 157:5577 -->
+    <div class="footer-wave">
+      <img src="home-assets/footer.svg" alt="" />
+    </div>
+    <!-- Footer inner — Figma 157:5576: left:70, top:64, w:1300 -->
+    <div class="footer-inner">
+      <!-- Brand block — Figma 157:5575 -->
+      <div class="footer-brand">
+        <a href="home.html" class="footer-logo">
+          <div class="footer-logo-icon">
+            <img src="home-assets/elvicons-logo.png" alt="" />
+          </div>
+          <span class="footer-logo-name"><span class="elf">Elf</span> Design System.</span>
+        </a>
+        <p class="footer-tagline">Hand-crafted with love by Ishaan Sharma.</p>
+      </div>
+      <!-- Footer nav — Figma 157:5565 -->
+      <nav class="footer-nav">
+        <a href="home.html" class="active">Home</a>
+        <a href="components.html">Components</a>
+        <a href="about.html">About Us</a>
+        <a href="feedback.html">Feedback</a>
+      </nav>
+    </div>
+  </footer>
+
+</div><!-- .page -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  (function() {
+    var anim = lottie.loadAnimation({ container: document.getElementById('lottie-anim'), renderer: 'svg', loop: true, autoplay: true, path: 'loader.json' });
+    var t0 = Date.now();
+    window.addEventListener('load', function() {
+      var delay = Math.max(0, 600 - (Date.now() - t0));
+      setTimeout(function() {
+        var el = document.getElementById('page-loader');
+        el.classList.add('loaded');
+        el.addEventListener('transitionend', function() { el.remove(); anim.destroy(); }, { once: true });
+      }, delay);
+    });
+  })();
+</script>
+</body>
+</html>

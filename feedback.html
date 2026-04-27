@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Feedback — ELF Design System 2.0</title>
+  <link rel="icon" type="image/svg+xml" href="fav-icon.svg" />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @view-transition { navigation: auto; }
+    @keyframes fade-in  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fade-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-6px); } }
+    ::view-transition-old(root) { animation: 180ms ease-in  fade-out; }
+    ::view-transition-new(root) { animation: 220ms ease-out fade-in; }
+    body { animation: fade-in 220ms ease-out backwards; }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: 'Manrope', sans-serif;
+      color: #0d121c;
+      background: white;
+      min-width: 1440px;
+    }
+    a { text-decoration: none; color: inherit; }
+
+    /* ══════════════════════════════════════════
+       NAVBAR — Pill shape, centered, fixed
+    ══════════════════════════════════════════ */
+    .navbar {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1008px;
+      height: 84px;
+      display: flex;
+      align-items: center;
+      padding: 20px 24px;
+      gap: 32px;
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 400px;
+      box-shadow: 0px 12px 40px rgba(0,108,182,0.12);
+      z-index: 200;
+    }
+    .nav-brand {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-brand-icon {
+      width: 36px;
+      height: 36px;
+      background: #006cb6;
+      border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden;
+    }
+    .nav-brand-icon img { width: 24px; height: 24px; display: block; }
+    .nav-brand-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .nav-brand-name .elf { color: #006cb6; }
+    .nav-links {
+      flex: 1 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-links a {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      color: #364152;
+      padding: 12px 24px;
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      white-space: nowrap;
+      transition: color 0.12s;
+    }
+    .nav-links a:hover { color: #0d121c; }
+    .nav-links a.active { color: #006cb6; }
+
+    /* ══════════════════════════════════════════
+       PAGE WRAPPER
+    ══════════════════════════════════════════ */
+    .page {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* ══ Background layer helpers ══ */
+    .bg-layer {
+      position: absolute;
+      left: 0; right: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .bg-layer img.cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .clouds-img {
+      position: absolute;
+      left: -28.47%;
+      top: -90.26%;
+      width: 166.11%;
+      height: 174.85%;
+      max-width: none;
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════
+       HERO — height: 720px
+    ══════════════════════════════════════════ */
+    .s-hero {
+      height: 720px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ══════════════════════════════════════════
+       FEEDBACK SECTION
+    ══════════════════════════════════════════ */
+    .s-feedback {
+      position: relative;
+      z-index: 1;
+      background: transparent;
+      padding-top: 32px;
+      padding-bottom: 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 33px;
+    }
+
+    /* Heading block — 640px wide, centered — Figma 226:16975 */
+    .feedback-heading-block {
+      width: 640px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .feedback-title {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 56px;
+      line-height: 72px;
+      color: #0d121c;
+    }
+    .feedback-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.5px;
+    }
+
+    /* Form card — Figma 226:17026 */
+    .feedback-card {
+      width: 634px;
+      background: rgba(255,255,255,0.4);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 0.5px solid #e9eaeb;
+      border-radius: 12px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* Input field wrapper */
+    .field-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+    }
+
+    /* Label row */
+    .field-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: #0d121c;
+      line-height: 18px;
+      text-transform: capitalize;
+    }
+    .field-label .required { color: #d92d2d; }
+
+    /* Text input */
+    .field-input {
+      width: 100%;
+      height: 40px;
+      background: white;
+      border: 1px solid #e9eaeb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      color: #0d121c;
+      line-height: 18px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field-input::placeholder {
+      color: #9aa4b2;
+    }
+    .field-input:focus {
+      border-color: #006cb6;
+      box-shadow: 0 0 0 3px rgba(0,108,182,0.12);
+    }
+
+    /* Textarea */
+    .field-textarea {
+      width: 100%;
+      height: 158px;
+      background: white;
+      border: 1px solid #e9eaeb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      color: #0d121c;
+      line-height: 18px;
+      resize: none;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .field-textarea::placeholder { color: #9aa4b2; }
+    .field-textarea:focus {
+      border-color: #006cb6;
+      box-shadow: 0 0 0 3px rgba(0,108,182,0.12);
+    }
+
+    /* Submit button */
+    .btn-submit {
+      width: 100%;
+      height: 42px;
+      background: #006cb6;
+      color: white;
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      letter-spacing: 0.1px;
+      line-height: 20px;
+      box-shadow: 0px 4px 12px rgba(0,108,182,0.2);
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-submit:hover { background: #025085; transform: translateY(-1px); }
+    .btn-submit:active { transform: translateY(0); }
+
+    /* ══════════════════════════════════════════
+       FOOTER
+    ══════════════════════════════════════════ */
+    .site-footer {
+      position: relative;
+      z-index: 1;
+      background: white;
+      height: 176px;
+    }
+    .footer-wave {
+      height: 16px;
+      overflow: hidden;
+    }
+    .footer-wave img { width: 100%; height: 16px; object-fit: cover; display: block; }
+    .footer-inner {
+      width: 1300px;
+      margin: 0 auto;
+      padding-top: 48px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+    .footer-brand { display: flex; flex-direction: column; gap: 12px; }
+    .footer-logo { display: flex; align-items: center; gap: 12px; }
+    .footer-logo-icon {
+      width: 36px; height: 36px;
+      background: #006cb6; border: 1.5px solid #025085;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0px 4px 8px rgba(0,108,182,0.25);
+      overflow: hidden; flex-shrink: 0;
+    }
+    .footer-logo-icon img { width: 24px; height: 24px; display: block; }
+    .footer-logo-name {
+      font-family: 'Instrument Serif', serif;
+      font-style: normal;
+      font-size: 32px;
+      line-height: 40px;
+      color: #0d121c;
+      white-space: nowrap;
+    }
+    .footer-logo-name .elf { color: #006cb6; }
+    .footer-tagline {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 20px;
+      color: #364152;
+      letter-spacing: 0.25px;
+    }
+    .footer-nav { display: flex; align-items: center; padding-top: 6px; }
+    .footer-nav a {
+      padding: 12px 24px;
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 24px;
+      color: #364152;
+      letter-spacing: 0.15px;
+      transition: color 0.12s;
+    }
+    .footer-nav a:hover { color: #006cb6; }
+    .footer-nav a.active { color: #006cb6; }
+    /* ── Page Loader ─── */
+    #page-loader { position: fixed; inset: 0; z-index: 9999; background: white; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s ease; }
+    #page-loader.loaded { opacity: 0; pointer-events: none; }
+    #lottie-anim { width: 200px; height: 200px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Page Loader ── -->
+<div id="page-loader"><div id="lottie-anim"></div></div>
+
+<!-- ════════════════════════════════════════════
+     NAVBAR — Fixed pill, "Feedback" active
+════════════════════════════════════════════ -->
+<nav class="navbar">
+  <a class="nav-brand" href="home.html">
+    <div class="nav-brand-icon">
+      <img src="home-assets/elvicons-logo.png" alt="" />
+    </div>
+    <span class="nav-brand-name"><span class="elf">Elf</span> Design System.</span>
+  </a>
+  <div class="nav-links">
+    <a href="home.html">Home</a>
+    <a href="components.html">Components</a>
+    <a href="about.html">About Us</a>
+    <a href="feedback.html" class="active">Feedback</a>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════════
+     PAGE WRAPPER
+════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── BACKGROUND: Hero illustration (y=0, h=720) ── -->
+  <div class="bg-layer" style="top:0; height:720px;">
+    <img class="cover" src="feedback-assets/hero-image.webp" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Wave separator at bottom of hero (y=646) ── -->
+  <div class="bg-layer" style="top:646px; height:95px; z-index:1;">
+    <img class="cover" src="home-assets/seperator.svg" alt="" />
+  </div>
+
+  <!-- ── BACKGROUND: Clouds behind feedback section (y=720, h=977) ── -->
+  <div class="bg-layer" style="top:720px; height:977px; z-index:0;">
+    <img class="clouds-img" src="home-assets/clouds.png" alt="" />
+  </div>
+
+
+  <!-- ════════════════════════════════════════════
+       HERO SECTION — h=720px (full-bleed illustration)
+  ════════════════════════════════════════════ -->
+  <section class="s-hero"></section>
+
+
+  <!-- ════════════════════════════════════════════
+       FEEDBACK SECTION — Figma 226:16975 + 226:17026
+       Heading at y=752, Form card at y=969
+  ════════════════════════════════════════════ -->
+  <section class="s-feedback">
+
+    <!-- Heading block — Figma 226:16975 -->
+    <div class="feedback-heading-block">
+      <h1 class="feedback-title">Let's build this together.</h1>
+      <p class="feedback-subtitle">Got any feedback or ideas? We'd love to hear from you!</p>
+    </div>
+
+    <!-- Form card — Figma 226:17026 -->
+    <form class="feedback-card" onsubmit="handleSubmit(event)">
+
+      <!-- Full Name — Figma I226:17031 -->
+      <div class="field-wrap">
+        <label class="field-label" for="field-name">
+          Full Name
+          <span class="required">*</span>
+        </label>
+        <input
+          id="field-name"
+          class="field-input"
+          type="text"
+          placeholder="Eg. Ishaan Sharma"
+          required
+        />
+      </div>
+
+      <!-- Email Address — Figma I226:17071 -->
+      <div class="field-wrap">
+        <label class="field-label" for="field-email">
+          Email Address
+          <span class="required">*</span>
+        </label>
+        <input
+          id="field-email"
+          class="field-input"
+          type="email"
+          placeholder="Eg. ishaan.s@mail.com"
+          required
+        />
+      </div>
+
+      <!-- Feedback textarea — Figma 226:17135 -->
+      <div class="field-wrap">
+        <label class="field-label" for="field-feedback">
+          Feedback
+          <span class="required">*</span>
+        </label>
+        <textarea
+          id="field-feedback"
+          class="field-textarea"
+          placeholder="Share your feedback"
+          required
+        ></textarea>
+      </div>
+
+      <!-- Submit -->
+      <button type="submit" class="btn-submit">Submit Feedback</button>
+
+    </form>
+
+  </section>
+
+
+  <!-- ════════════════════════════════════════════
+       FOOTER — Figma 226:17161
+  ════════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="footer-wave">
+      <img src="home-assets/footer.svg" alt="" />
+    </div>
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <a href="home.html" class="footer-logo">
+          <div class="footer-logo-icon">
+            <img src="home-assets/elvicons-logo.png" alt="" />
+          </div>
+          <span class="footer-logo-name"><span class="elf">Elf</span> Design System.</span>
+        </a>
+        <p class="footer-tagline">Hand-crafted with love by Ishaan Sharma.</p>
+      </div>
+      <nav class="footer-nav">
+        <a href="home.html">Home</a>
+        <a href="components.html">Components</a>
+        <a href="about.html">About Us</a>
+        <a href="feedback.html" class="active">Feedback</a>
+      </nav>
+    </div>
+  </footer>
+
+</div><!-- .page -->
+
+<script>
+  function handleSubmit(e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('.btn-submit');
+    btn.textContent = 'Feedback Submitted!';
+    btn.style.background = '#15b36a';
+    btn.disabled = true;
+    setTimeout(() => {
+      e.target.reset();
+      btn.textContent = 'Submit Feedback';
+      btn.style.background = '';
+      btn.disabled = false;
+    }, 3000);
+  }
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  (function() {
+    var anim = lottie.loadAnimation({ container: document.getElementById('lottie-anim'), renderer: 'svg', loop: true, autoplay: true, path: 'loader.json' });
+    var t0 = Date.now();
+    window.addEventListener('load', function() {
+      var delay = Math.max(0, 600 - (Date.now() - t0));
+      setTimeout(function() {
+        var el = document.getElementById('page-loader');
+        el.classList.add('loaded');
+        el.addEventListener('transitionend', function() { el.remove(); anim.destroy(); }, { once: true });
+      }, delay);
+    });
+  })();
+</script>
+</body>
+</html>
